@@ -4,7 +4,7 @@
 
 <p>Extension for <a href="https://www.octane.wtf">Octane</a>.</p>
 
-<p><strong>This project is work in progress and 100% open-source. Any issues found, please report them by clicking <a href="https://github.com/zykieboi/nexus/issues/new">here</a>!</strong></p>
+<p><strong>This project is work in progress and 100% open-source. Any issues found, please report them by clicking <a href="https://github.com/7io5/nexus/issues/new">here</a>!</strong></p>
 
 </div>
 
@@ -37,24 +37,24 @@ Click the Octane logo to join the official group!
    <strong>Allow user scripts</strong>, <em>or</em> enable <strong>Developer mode</strong> at
    <code>chrome://extensions</code>.<br>See the <a href="https://www.tampermonkey.net/faq.php?ext=iikm&amp;q=Q209">Tampermonkey FAQ</a> for more information.</p>
 
-<p>3. Click <a href="https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js">here</a>
+<p>3. Click <a href="https://raw.githubusercontent.com/7io5/nexus/main/main.user.js">here</a>
    to install or update</p>
 
 <p>Tampermonkey checks for updates automatically. If you want to force one, either open the Tampermonkey dashboard and press <strong>Check for updates</strong> on the userscript or click the <strong>Installation link</strong> to update.</p>
 
 <h2>Test out in-coming features</h2>
 
-if u lwk wanna test new features or wanna look what im working on, click <a href="https://raw.githubusercontent.com/zykieboi/nexus/testing/main.user.js">here</a>
+if u lwk wanna test new features or wanna look what im working on, click <a href="https://raw.githubusercontent.com/7io5/nexus/testing/main.user.js">here</a>
 
 <h2>Settings</h2>
 
 <p>NOW MOVED TO <a href="https://octane.wtf/my/account/">https://octane.wtf/my/account/</a></p>
 
 <a href="https://octane.wtf/my/account/">
-  <img src="https://github.com/zykieboi/nexus/blob/main/img/settings.png?raw=true" alt="Settings" width="400">
+  <img src="https://github.com/7io5/nexus/blob/main/img/settings.png?raw=true" alt="Settings" width="400">
 </a>
 
 
 <h2>Credits</h2>
-<p><a href="https://github.com/zykieboi/nexus/blob/main/src/features/oldroblox.js">Roblox 2019L Theme</a> by @bosketi</p>
+<p><a href="https://github.com/7io5/nexus/blob/main/src/features/oldroblox.js">Roblox 2019L Theme</a> by @bosketi</p>
 And me
