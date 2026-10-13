@@ -203,7 +203,9 @@
     };
 
     function shortNum(n) {
+        if (n === null || n === undefined || n < 0) return '--';
         n = Number(n) || 0;
+        if (n === 0) return '0';
         if (n < 1000) return String(n);
         if (n < 1000000) {
             var k = n / 1000;
@@ -257,6 +259,12 @@
         });
     }
 
+    function pickNum(v) {
+        var n = Number(v);
+        if (!isFinite(n) || n < 0) return null;
+        return n;
+    }
+
     function loadLimiteds(userId) {
         return Promise.all([
             fetch('/apisite/inventory/v1/users/' + userId + '/assets/collectibles',
@@ -278,18 +286,20 @@
                 var d = details[id] || null;
 
                 var name = d ? d[0] : (item.name || '');
-                var itemRap = d ? Number(d[2]) : (Number(item.recentAveragePrice) || 0);
-                var itemValue = d ? Number(d[4]) : (Number(item.originalPrice) || 0);
+                var rawRap = d ? pickNum(d[2]) : pickNum(item.recentAveragePrice);
+                var rawValue = d ? pickNum(d[4]) : pickNum(item.originalPrice);
 
-                if (!(itemRap > 0)) itemRap = 0;
-                if (!(itemValue > 0)) itemValue = itemRap;
+                var itemRap = rawRap === null ? 0 : rawRap;
+                var itemValue = rawValue === null ? 0 : rawValue;
 
                 out.push({
                     assetId: id,
                     id: id,
                     name: name,
-                    recentAveragePrice: itemRap,
-                    originalPrice: itemValue,
+                    rap: itemRap,
+                    value: itemValue,
+                    rapDisplay: rawRap === null ? '--' : shortNum(rawRap),
+                    valueDisplay: rawValue === null ? '--' : shortNum(rawValue),
                     serialNumber: item.serialNumber,
                     assetTypeId: item.assetTypeId || item.assetType,
                     thumbnail: item.thumbnail
@@ -348,7 +358,7 @@
 
     function arrange() {
         return items.slice().sort(function (a, b) {
-            return (Number(b.recentAveragePrice) || 0) - (Number(a.recentAveragePrice) || 0);
+            return (Number(b.rap) || 0) - (Number(a.rap) || 0);
         });
     }
 
@@ -356,16 +366,14 @@
         var id = item.assetId || item.id || '';
         var slug = (item.name || '').trim().replace(/\s+/g, '-');
         var sn = serialNum(item);
-        var rap = Number(item.recentAveragePrice) || 0;
-        var value = Number(item.originalPrice) || rap;
         return {
             name: item.name || '',
             assetId: id,
             assetType: assetTypeName(item),
             serial: sn,
             serialText: sn === null ? 'N/A' : '#' + sn,
-            rap: rap,
-            value: value,
+            rap: item.rapDisplay,
+            value: item.valueDisplay,
             link: 'https://octane.wtf/catalog/' + id + (slug ? '/' + slug : '')
         };
     }
@@ -410,8 +418,6 @@
             username: whoami,
             exportedAt: new Date().toISOString(),
             totalItems: list.length,
-            totalRap: list.reduce(function (s, r) { return s + r.rap; }, 0),
-            totalValue: list.reduce(function (s, r) { return s + r.value; }, 0),
             items: list
         };
         saveFile(whoami + '-limiteds.json', JSON.stringify(payload, null, 2), 'application/json;charset=utf-8;');
@@ -420,15 +426,11 @@
     function saveTxt() {
         if (!items.length) return;
         var list = arrange();
-        var totalRap = list.reduce(function (s, i) { return s + (Number(i.recentAveragePrice) || 0); }, 0);
-        var totalValue = list.reduce(function (s, i) { return s + (Number(i.originalPrice) || 0); }, 0);
 
         var lines = [];
         lines.push(whoami + "'s Limiteds");
         lines.push('Exported: ' + new Date().toLocaleString());
         lines.push('Items: ' + list.length);
-        lines.push('Total RAP: ' + totalRap);
-        lines.push('Total Value: ' + totalValue);
         lines.push('');
         lines.push('----------------------------------------');
 
@@ -459,9 +461,6 @@
         var headEdge = dark ? '#1c1c1c' : '#efefef';
         var faded = dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
         var thumbBg = dark ? '#1c1c1c' : '#f4f4f4';
-        var thumbHover = dark ? '#242424' : '#e8e8e8';
-        var skeleton1 = dark ? '#1e1e1e' : '#eeeeee';
-        var skeleton2 = dark ? '#2c2c2c' : '#f8f8f8';
         var pillBg = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
         var pillText = dark ? '#bdbebe' : '#606162';
         var serialBg = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)';
@@ -502,14 +501,27 @@
             '#' + OVERLAY_ID + '.nx-open #' + MODAL_ID + '{transform:scale(1);}',
 
             '#' + MODAL_ID + ' .nx-rap-head{',
-            'display:flex;align-items:center;justify-content:space-between;',
+            'display:flex;align-items:flex-start;justify-content:space-between;',
             'padding:14px 18px;border-bottom:1px solid ' + headEdge + ';',
-            'font-weight:700;font-size:15px;flex:none;color:' + heading + ';',
-            'gap:10px;background:' + (dark ? '#141414' : '#fafafa') + ';',
+            'flex:none;gap:10px;background:' + (dark ? '#141414' : '#fafafa') + ';',
+            '}',
+
+            '#' + MODAL_ID + ' .nx-rap-head-left{',
+            'flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-title{',
-            'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
+            'font-weight:700;font-size:15px;color:' + heading + ';',
+            'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
+            '}',
+
+            '#' + MODAL_ID + ' .nx-rap-subtitle{',
+            'font-size:12px;font-weight:500;color:' + faded + ';',
+            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;',
+            '}',
+
+            '#' + MODAL_ID + ' .nx-rap-head-right{',
+            'display:flex;align-items:center;gap:10px;flex:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-export{position:relative;}',
@@ -567,10 +579,10 @@
 
             '#' + MODAL_ID + ' .item-card-container{',
             'background:transparent;border-radius:6px;padding:6px;',
-            'text-align:center;transition:background 0.15s;',
+            'text-align:center;',
             '}',
 
-            '#' + MODAL_ID + ' .item-card-link{color:inherit;text-decoration:none;display:block;position:relative;z-index:1;}',
+            '#' + MODAL_ID + ' .item-card-link{color:inherit;text-decoration:none;display:block;}',
             '#' + MODAL_ID + ' .item-card-link:hover{text-decoration:none;color:inherit;}',
 
             '#' + MODAL_ID + ' .item-card-thumb-container{',
@@ -578,16 +590,11 @@
             'background:' + thumbBg + ';border-radius:6px;',
             'overflow:hidden;margin-bottom:8px;',
             'align-items:center;justify-content:center;',
-            'transition:background 0.15s;position:relative;',
-            'pointer-events:none;',
-            '}',
-            '#' + MODAL_ID + ' .item-card-link:hover .item-card-thumb-container{',
-            'background:' + thumbHover + ';',
+            'position:relative;',
             '}',
 
             '#' + MODAL_ID + ' .item-card-thumb-container img{',
             'width:100%;height:100%;object-fit:contain;',
-            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-serial{',
@@ -602,21 +609,18 @@
             'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
             'color:' + (dark ? '#d0d0d0' : '#3d3d3d') + ';',
             'text-align:center;margin-bottom:4px;padding:0 2px;',
-            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-type{',
             'display:inline-block;background:' + pillBg + ';color:' + pillText + ';',
             'font-size:10px;font-weight:600;line-height:1;',
             'padding:2px 6px;border-radius:8px;margin-bottom:5px;',
-            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-card-stats{',
             'display:flex;align-items:center;justify-content:center;',
             'gap:5px;font-size:11px;font-weight:700;',
-            'flex-wrap:wrap;',
-            'pointer-events:none;',
+            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-green{color:#00b06f;}',
             '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-blue{color:#0a84ff;}',
@@ -639,36 +643,7 @@
             'padding:60px 0;text-align:center;',
             '}',
 
-            '@keyframes nx-rap-spin{to{transform:rotate(360deg);}}',
-            '@keyframes nx-rap-shimmer{',
-            '0%{background-position:-200% 0;}',
-            '100%{background-position:200% 0;}',
-            '}',
-
-            '#' + MODAL_ID + ' .nx-rap-skel-card{',
-            'border-radius:6px;padding:6px;text-align:center;',
-            '}',
-            '#' + MODAL_ID + ' .nx-rap-skel-thumb{',
-            'width:100%;aspect-ratio:1/1;border-radius:6px;',
-            'background:linear-gradient(90deg,',
-            skeleton1 + ' 0%,',
-            skeleton2 + ' 50%,',
-            skeleton1 + ' 100%);',
-            'background-size:200% 100%;',
-            'animation:nx-rap-shimmer 1.4s infinite;',
-            'margin-bottom:8px;',
-            '}',
-            '#' + MODAL_ID + ' .nx-rap-skel-line{',
-            'height:11px;border-radius:5px;margin:0 auto 5px;',
-            'background:linear-gradient(90deg,',
-            skeleton1 + ' 0%,',
-            skeleton2 + ' 50%,',
-            skeleton1 + ' 100%);',
-            'background-size:200% 100%;',
-            'animation:nx-rap-shimmer 1.4s infinite;',
-            '}',
-            '#' + MODAL_ID + ' .nx-rap-skel-line.l1{width:80%;}',
-            '#' + MODAL_ID + ' .nx-rap-skel-line.l2{width:55%;}'
+            '@keyframes nx-rap-spin{to{transform:rotate(360deg);}}'
         ].join('');
         document.head.appendChild(style);
     }
@@ -692,9 +667,22 @@
         var head = document.createElement('div');
         head.className = 'nx-rap-head';
 
+        var left = document.createElement('div');
+        left.className = 'nx-rap-head-left';
+
         var title = document.createElement('span');
         title.className = 'nx-rap-title';
         title.textContent = 'Limiteds';
+
+        var subtitle = document.createElement('span');
+        subtitle.className = 'nx-rap-subtitle';
+        subtitle.textContent = '-- RAP \u2022 -- Value';
+
+        left.appendChild(title);
+        left.appendChild(subtitle);
+
+        var right = document.createElement('div');
+        right.className = 'nx-rap-head-right';
 
         var exportWrap = document.createElement('div');
         exportWrap.className = 'nx-rap-export';
@@ -735,9 +723,11 @@
         close.textContent = '\u00d7';
         close.onclick = closeModal;
 
-        head.appendChild(title);
-        head.appendChild(exportWrap);
-        head.appendChild(close);
+        right.appendChild(exportWrap);
+        right.appendChild(close);
+
+        head.appendChild(left);
+        head.appendChild(right);
 
         var body = document.createElement('div');
         body.className = 'nx-rap-body';
@@ -763,41 +753,6 @@
         });
 
         return overlay;
-    }
-
-    function paintSkeleton(n) {
-        var overlay = document.getElementById(OVERLAY_ID);
-        if (!overlay) return;
-        var body = overlay.querySelector('.nx-rap-body');
-
-        var ul = document.createElement('ul');
-        ul.className = 'hlist item-cards';
-
-        for (var i = 0; i < n; i++) {
-            var li = document.createElement('li');
-            li.className = 'list-item item-card';
-
-            var card = document.createElement('div');
-            card.className = 'nx-rap-skel-card';
-
-            var thumb = document.createElement('div');
-            thumb.className = 'nx-rap-skel-thumb';
-
-            var line1 = document.createElement('div');
-            line1.className = 'nx-rap-skel-line l1';
-
-            var line2 = document.createElement('div');
-            line2.className = 'nx-rap-skel-line l2';
-
-            card.appendChild(thumb);
-            card.appendChild(line1);
-            card.appendChild(line2);
-            li.appendChild(card);
-            ul.appendChild(li);
-        }
-
-        body.innerHTML = '';
-        body.appendChild(ul);
     }
 
     function paintSpinner() {
@@ -861,15 +816,12 @@
             box.appendChild(typeEl);
         }
 
-        var rap = Number(item.recentAveragePrice) || 0;
-        var value = Number(item.originalPrice) || rap;
-
         var stats = document.createElement('div');
         stats.className = 'nx-rap-card-stats';
 
         var rapEl = document.createElement('span');
         rapEl.className = 'nx-rap-green';
-        rapEl.textContent = shortNum(rap) + ' RAP';
+        rapEl.textContent = item.rapDisplay + ' RAP';
 
         var dot = document.createElement('span');
         dot.className = 'nx-rap-dot';
@@ -877,7 +829,7 @@
 
         var valEl = document.createElement('span');
         valEl.className = 'nx-rap-blue';
-        valEl.textContent = shortNum(value) + ' Value';
+        valEl.textContent = item.valueDisplay + ' Value';
 
         stats.appendChild(rapEl);
         stats.appendChild(dot);
@@ -892,13 +844,33 @@
         var overlay = document.getElementById(OVERLAY_ID);
         if (!overlay) return;
         var body = overlay.querySelector('.nx-rap-body');
+        var subtitle = overlay.querySelector('.nx-rap-subtitle');
 
         if (!items.length) {
             body.innerHTML = '<div class="nx-rap-empty">No limiteds found.</div>';
+            if (subtitle) subtitle.textContent = '-- RAP \u2022 -- Value';
             return;
         }
 
         var list = arrange();
+
+        var totalRap = 0;
+        var totalValue = 0;
+        var rapUnknown = false;
+        var valueUnknown = false;
+
+        for (var k = 0; k < list.length; k++) {
+            totalRap += list[k].rap || 0;
+            totalValue += list[k].value || 0;
+            if (list[k].rapDisplay === '--') rapUnknown = true;
+            if (list[k].valueDisplay === '--') valueUnknown = true;
+        }
+
+        if (subtitle) {
+            subtitle.textContent =
+                (rapUnknown ? '--' : shortNum(totalRap)) + ' RAP \u2022 ' +
+                (valueUnknown ? '--' : shortNum(totalValue)) + ' Value';
+        }
 
         body.innerHTML = '';
 
@@ -913,11 +885,13 @@
     function openModal(userId, username) {
         var overlay = buildModal();
         var title = overlay.querySelector('.nx-rap-title');
+        var subtitle = overlay.querySelector('.nx-rap-subtitle');
 
         applyStyle();
 
         whoami = username || 'user';
         title.textContent = whoami + "'s Limiteds";
+        if (subtitle) subtitle.textContent = '-- RAP \u2022 -- Value';
         overlay.classList.add('nx-open');
 
         items = [];
@@ -932,6 +906,7 @@
                 title.textContent = whoami + "'s Limiteds (0)";
                 overlay.querySelector('.nx-rap-body').innerHTML =
                     '<div class="nx-rap-empty">No limiteds found.</div>';
+                if (subtitle) subtitle.textContent = '-- RAP \u2022 -- Value';
                 return;
             }
 
