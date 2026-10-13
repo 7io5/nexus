@@ -582,7 +582,7 @@
             '#' + MODAL_ID + ' .nx-rap-body::-webkit-scrollbar-thumb:hover{background:' + scrollThumbHover + ';}',
 
             '#' + MODAL_ID + ' ul.hlist.item-cards{',
-            'display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));',
+            'display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));',
             'gap:8px;padding:0;margin:0;list-style:none;',
             '}',
 
