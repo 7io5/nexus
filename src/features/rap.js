@@ -100,6 +100,7 @@
             var details = results[1];
             var out = [];
             var rap = 0;
+            var value = 0;
 
             for (var i = 0; i < list.length; i++) {
                 var item = list[i];
@@ -108,21 +109,26 @@
 
                 var name = d ? d[0] : (item.name || '');
                 var itemRap = d ? Number(d[2]) : (Number(item.recentAveragePrice) || 0);
+                var itemValue = d ? Number(d[4]) : (Number(item.originalPrice) || 0);
+
                 if (!(itemRap > 0)) itemRap = 0;
+                if (!(itemValue > 0)) itemValue = itemRap;
 
                 out.push({
                     assetId: id,
                     id: id,
                     name: name,
                     recentAveragePrice: itemRap,
+                    originalPrice: itemValue,
                     serialNumber: item.serialNumber,
                     assetTypeId: item.assetTypeId || item.assetType,
                     thumbnail: item.thumbnail
                 });
 
                 rap += itemRap;
+                value += itemValue;
             }
-            return { list: out, rap: rap };
+            return { list: out, rap: rap, value: value };
         });
     }
 
@@ -181,6 +187,7 @@
         var slug = (item.name || '').trim().replace(/\s+/g, '-');
         var sn = serialNum(item);
         var rap = Number(item.recentAveragePrice) || 0;
+        var value = Number(item.originalPrice) || rap;
         return {
             name: item.name || '',
             assetId: id,
@@ -188,6 +195,7 @@
             serial: sn,
             serialText: sn === null ? 'N/A' : '#' + sn,
             rap: rap,
+            value: value,
             link: 'https://octane.wtf/catalog/' + id + (slug ? '/' + slug : '')
         };
     }
@@ -214,10 +222,10 @@
 
     function saveCsv() {
         if (!items.length) return;
-        var rows = [['Name', 'Asset ID', 'Type', 'Serial', 'RAP', 'Link']];
+        var rows = [['Name', 'Asset ID', 'Type', 'Serial', 'RAP', 'Value', 'Link']];
         arrange().forEach(function (item) {
             var r = asRow(item);
-            rows.push([r.name, r.assetId, r.assetType, r.serialText, r.rap, r.link]);
+            rows.push([r.name, r.assetId, r.assetType, r.serialText, r.rap, r.value, r.link]);
         });
         var text = rows.map(function (row) {
             return row.map(csvSafe).join(',');
@@ -233,6 +241,7 @@
             exportedAt: new Date().toISOString(),
             totalItems: list.length,
             totalRap: list.reduce(function (s, r) { return s + r.rap; }, 0),
+            totalValue: list.reduce(function (s, r) { return s + r.value; }, 0),
             items: list
         };
         saveFile(whoami + '-limiteds.json', JSON.stringify(payload, null, 2), 'application/json;charset=utf-8;');
@@ -242,12 +251,14 @@
         if (!items.length) return;
         var list = arrange();
         var totalRap = list.reduce(function (s, i) { return s + (Number(i.recentAveragePrice) || 0); }, 0);
+        var totalValue = list.reduce(function (s, i) { return s + (Number(i.originalPrice) || 0); }, 0);
 
         var lines = [];
         lines.push(whoami + "'s Limiteds");
         lines.push('Exported: ' + new Date().toLocaleString());
         lines.push('Items: ' + list.length);
         lines.push('Total RAP: ' + totalRap);
+        lines.push('Total Value: ' + totalValue);
         lines.push('');
         lines.push('----------------------------------------');
 
@@ -256,7 +267,8 @@
             lines.push(r.name);
             lines.push('  Type: ' + r.assetType +
                        '  |  Serial: ' + r.serialText +
-                       '  |  RAP: ' + r.rap);
+                       '  |  RAP: ' + r.rap +
+                       '  |  Value: ' + r.value);
             lines.push('  ' + r.link);
             lines.push('');
         });
@@ -270,31 +282,32 @@
 
         var dark = darkMode();
 
-        var panelBg = dark
-            ? 'linear-gradient(180deg, rgba(38,40,43,0.98) 0%, rgba(35,37,39,0.98) 100%)'
-            : 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%)';
-        var panelText = dark ? '#bdbebe' : '#343434';
-        var heading = dark ? '#ffffff' : '#343434';
-        var panelEdge = dark ? 'rgba(101,102,104,0.6)' : 'rgba(199,203,206,0.7)';
-        var headEdge = dark ? 'rgba(57,59,61,0.9)' : 'rgba(224,227,229,0.9)';
-        var faded = dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
-        var thumbBg = dark ? 'rgba(57,59,61,0.6)' : 'rgba(242,244,245,0.8)';
-        var thumbHover = dark ? 'rgba(74,77,80,0.85)' : 'rgba(228,231,233,0.95)';
-        var selectBg = dark ? 'rgba(57,59,61,0.8)' : 'rgba(255,255,255,0.9)';
-        var selectEdge = dark ? 'rgba(101,102,104,0.6)' : 'rgba(199,203,206,0.7)';
-        var skeleton1 = dark ? 'rgba(44,46,48,0.6)' : 'rgba(232,234,236,0.6)';
-        var skeleton2 = dark ? 'rgba(58,61,64,0.85)' : 'rgba(244,246,248,0.9)';
+        var panelBg = dark ? '#121212' : '#ffffff';
+        var panelText = dark ? '#bdbebe' : '#3d3d3d';
+        var heading = dark ? '#ffffff' : '#202124';
+        var panelEdge = dark ? '#262626' : '#e4e4e4';
+        var headEdge = dark ? '#1c1c1c' : '#efefef';
+        var faded = dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+        var thumbBg = dark ? '#1c1c1c' : '#f4f4f4';
+        var thumbHover = dark ? '#242424' : '#e8e8e8';
+        var skeleton1 = dark ? '#1e1e1e' : '#eeeeee';
+        var skeleton2 = dark ? '#2c2c2c' : '#f8f8f8';
         var pillBg = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
         var pillText = dark ? '#bdbebe' : '#606162';
-        var serialBg = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-        var serialText = dark ? '#bdbebe' : '#606162';
-        var btnBg = dark ? 'rgba(57,59,61,0.8)' : 'rgba(255,255,255,0.9)';
-        var btnEdge = dark ? 'rgba(101,102,104,0.6)' : 'rgba(199,203,206,0.7)';
-        var btnText = dark ? '#bdbebe' : '#343434';
-        var btnHover = dark ? 'rgba(74,77,80,0.9)' : 'rgba(228,231,233,0.95)';
-        var menuBg = dark ? 'rgba(45,47,50,0.98)' : 'rgba(255,255,255,0.98)';
-        var menuEdge = dark ? 'rgba(101,102,104,0.7)' : 'rgba(199,203,206,0.8)';
-        var menuHover = dark ? 'rgba(74,77,80,0.9)' : 'rgba(228,231,233,0.95)';
+        var serialBg = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)';
+        var serialText = dark ? '#e0e0e0' : '#3d3d3d';
+        var btnBg = dark ? '#1c1c1c' : '#f2f2f2';
+        var btnEdge = dark ? '#2c2c2c' : '#e4e4e4';
+        var btnText = dark ? '#d0d0d0' : '#3d3d3d';
+        var btnHover = dark ? '#262626' : '#e8e8e8';
+        var menuBg = dark ? '#181818' : '#ffffff';
+        var menuEdge = dark ? '#2c2c2c' : '#e4e4e4';
+        var menuHover = dark ? '#222222' : '#f2f2f2';
+        var scrollTrack = dark ? '#141414' : '#f0f0f0';
+        var scrollThumb = dark ? '#2e2e2e' : '#c8c8c8';
+        var scrollThumbHover = dark ? '#3a3a3a' : '#b0b0b0';
+        var spinner = dark ? '#e0e0e0' : '#3d3d3d';
+        var spinnerTrack = dark ? '#262626' : '#e4e4e4';
 
         var style = document.createElement('style');
         style.id = STYLE_ID;
@@ -312,7 +325,7 @@
             'border:1px solid ' + panelEdge + ';border-radius:10px;',
             'width:min(92vw,1000px);height:min(85vh,720px);',
             'display:flex;flex-direction:column;overflow:hidden;',
-            'box-shadow:0 12px 40px rgba(0,0,0,0.45);',
+            'box-shadow:0 12px 40px rgba(0,0,0,0.55);',
             'font-family:"HCo Gotham SSm","Helvetica Neue",Helvetica,Arial,sans-serif;',
             'transform:scale(0.98);transition:transform 0.15s ease;',
             '}',
@@ -322,7 +335,7 @@
             'display:flex;align-items:center;justify-content:space-between;',
             'padding:14px 18px;border-bottom:1px solid ' + headEdge + ';',
             'font-weight:700;font-size:15px;flex:none;color:' + heading + ';',
-            'gap:10px;background:rgba(0,0,0,0.02);',
+            'gap:10px;background:' + (dark ? '#141414' : '#fafafa') + ';',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-title{',
@@ -344,7 +357,7 @@
             'position:absolute;top:calc(100% + 4px);right:0;',
             'min-width:120px;background:' + menuBg + ';',
             'border:1px solid ' + menuEdge + ';border-radius:6px;',
-            'box-shadow:0 8px 24px rgba(0,0,0,0.35);',
+            'box-shadow:0 8px 24px rgba(0,0,0,0.55);',
             'padding:4px;display:none;z-index:10;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-export-menu.open{display:block;}',
@@ -367,7 +380,13 @@
 
             '#' + MODAL_ID + ' .nx-rap-body{',
             'padding:16px 18px 20px;overflow-y:auto;flex:1;',
+            'scrollbar-width:thin;',
+            'scrollbar-color:' + scrollThumb + ' ' + scrollTrack + ';',
             '}',
+            '#' + MODAL_ID + ' .nx-rap-body::-webkit-scrollbar{width:10px;height:10px;}',
+            '#' + MODAL_ID + ' .nx-rap-body::-webkit-scrollbar-track{background:' + scrollTrack + ';border-radius:5px;}',
+            '#' + MODAL_ID + ' .nx-rap-body::-webkit-scrollbar-thumb{background:' + scrollThumb + ';border-radius:5px;border:2px solid ' + scrollTrack + ';}',
+            '#' + MODAL_ID + ' .nx-rap-body::-webkit-scrollbar-thumb:hover{background:' + scrollThumbHover + ';}',
 
             '#' + MODAL_ID + ' ul.hlist.item-cards{',
             'display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));',
@@ -381,7 +400,7 @@
             'text-align:center;transition:background 0.15s;',
             '}',
 
-            '#' + MODAL_ID + ' .item-card-link{color:inherit;text-decoration:none;display:block;}',
+            '#' + MODAL_ID + ' .item-card-link{color:inherit;text-decoration:none;display:block;position:relative;z-index:1;}',
             '#' + MODAL_ID + ' .item-card-link:hover{text-decoration:none;color:inherit;}',
 
             '#' + MODAL_ID + ' .item-card-thumb-container{',
@@ -390,6 +409,7 @@
             'overflow:hidden;margin-bottom:8px;',
             'align-items:center;justify-content:center;',
             'transition:background 0.15s;position:relative;',
+            'pointer-events:none;',
             '}',
             '#' + MODAL_ID + ' .item-card-link:hover .item-card-thumb-container{',
             'background:' + thumbHover + ';',
@@ -397,6 +417,7 @@
 
             '#' + MODAL_ID + ' .item-card-thumb-container img{',
             'width:100%;height:100%;object-fit:contain;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-serial{',
@@ -409,26 +430,46 @@
             '#' + MODAL_ID + ' .item-card-name{',
             'font-size:12px;font-weight:500;line-height:1.3;',
             'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
-            'color:' + (dark ? '#bdbebe' : '#343434') + ';',
+            'color:' + (dark ? '#d0d0d0' : '#3d3d3d') + ';',
             'text-align:center;margin-bottom:4px;padding:0 2px;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-type{',
             'display:inline-block;background:' + pillBg + ';color:' + pillText + ';',
             'font-size:10px;font-weight:600;line-height:1;',
             'padding:2px 6px;border-radius:8px;margin-bottom:5px;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-card-stats{',
             'display:flex;align-items:center;justify-content:center;',
             'gap:5px;font-size:11px;font-weight:700;',
+            'flex-wrap:wrap;',
+            'pointer-events:none;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-green{color:#00b06f;}',
+            '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-blue{color:#0a84ff;}',
+            '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-dot{',
+            'color:' + faded + ';font-weight:400;',
+            '}',
 
             '#' + MODAL_ID + ' .nx-rap-empty{',
             'padding:40px 0;text-align:center;color:' + faded + ';font-size:14px;',
             '}',
 
+            '#' + MODAL_ID + ' .nx-rap-spinner{',
+            'width:34px;height:34px;margin:0 auto;',
+            'border:3px solid ' + spinnerTrack + ';',
+            'border-top-color:' + spinner + ';',
+            'border-radius:50%;',
+            'animation:nx-rap-spin 0.8s linear infinite;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-loading{',
+            'padding:60px 0;text-align:center;',
+            '}',
+
+            '@keyframes nx-rap-spin{to{transform:rotate(360deg);}}',
             '@keyframes nx-rap-shimmer{',
             '0%{background-position:-200% 0;}',
             '100%{background-position:200% 0;}',
@@ -589,6 +630,13 @@
         body.appendChild(ul);
     }
 
+    function paintSpinner() {
+        var overlay = document.getElementById(OVERLAY_ID);
+        if (!overlay) return;
+        var body = overlay.querySelector('.nx-rap-body');
+        body.innerHTML = '<div class="nx-rap-loading"><div class="nx-rap-spinner"></div></div>';
+    }
+
     function makeCard(item) {
         var li = document.createElement('li');
         li.className = 'list-item item-card';
@@ -644,6 +692,7 @@
         }
 
         var rap = Number(item.recentAveragePrice) || 0;
+        var value = Number(item.originalPrice) || rap;
 
         var stats = document.createElement('div');
         stats.className = 'nx-rap-card-stats';
@@ -652,7 +701,17 @@
         rapEl.className = 'nx-rap-green';
         rapEl.textContent = shortNum(rap) + ' RAP';
 
+        var dot = document.createElement('span');
+        dot.className = 'nx-rap-dot';
+        dot.textContent = '\u2022';
+
+        var valEl = document.createElement('span');
+        valEl.className = 'nx-rap-blue';
+        valEl.textContent = shortNum(value) + ' Value';
+
         stats.appendChild(rapEl);
+        stats.appendChild(dot);
+        stats.appendChild(valEl);
         box.appendChild(stats);
 
         li.appendChild(box);
@@ -694,7 +753,7 @@
         items = [];
         thumbs = {};
 
-        paintSkeleton(12);
+        paintSpinner();
 
         loadLimiteds(userId).then(function (data) {
             items = data.list;
