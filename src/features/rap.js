@@ -401,7 +401,7 @@
             '#' + MODAL_ID + ' .nx-rap-body::-webkit-scrollbar-thumb:hover{background:' + scrollThumbHover + ';}',
 
             '#' + MODAL_ID + ' ul.hlist.item-cards{',
-            'display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));',
+            'display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));',
             'gap:8px;padding:0;margin:0;list-style:none;',
             '}',
 
@@ -454,7 +454,7 @@
             '#' + MODAL_ID + ' .nx-rap-card-stats{',
             'display:flex;align-items:center;justify-content:center;',
             'gap:5px;font-size:11px;font-weight:700;',
-            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;',
+            'white-space:nowrap;',
             'pointer-events:none;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-green{color:#00b06f;}',
@@ -785,7 +785,7 @@
         applyStyle();
 
         whoami = username || 'user';
-        title.textContent = whoami + "'s Limiteds";
+        title.textContent = whoami + "'s Limiteds (0)";
         if (subtitle) subtitle.textContent = '-- RAP \u2022 -- Value';
         overlay.classList.add('nx-open');
 
