@@ -293,7 +293,7 @@
                 var rawValue = d ? pickNum(d[4]) : pickNum(item.originalPrice);
 
                 var itemRap = rawRap === null ? 0 : rawRap;
-                var itemValue = rawValue === null ? 0 : rawValue;
+                var itemValue = rawValue === null ? itemRap : rawValue;
 
                 out.push({
                     assetId: id,
@@ -470,6 +470,8 @@
         var headEdge = dark ? '#1c1c1c' : '#efefef';
         var faded = dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
         var thumbBg = dark ? '#1c1c1c' : '#f4f4f4';
+        var skeleton1 = dark ? '#1e1e1e' : '#eeeeee';
+        var skeleton2 = dark ? '#2c2c2c' : '#f8f8f8';
         var pillBg = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
         var pillText = dark ? '#bdbebe' : '#606162';
         var serialBg = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)';
@@ -591,7 +593,7 @@
             'text-align:center;',
             '}',
 
-            '#' + MODAL_ID + ' .item-card-link{color:inherit;text-decoration:none;display:block;}',
+            '#' + MODAL_ID + ' .item-card-link{color:inherit;text-decoration:none;display:block;position:relative;z-index:1;}',
             '#' + MODAL_ID + ' .item-card-link:hover{text-decoration:none;color:inherit;}',
 
             '#' + MODAL_ID + ' .item-card-thumb-container{',
@@ -600,10 +602,12 @@
             'overflow:hidden;margin-bottom:8px;',
             'align-items:center;justify-content:center;',
             'position:relative;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .item-card-thumb-container img{',
             'width:100%;height:100%;object-fit:contain;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-serial{',
@@ -618,18 +622,21 @@
             'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
             'color:' + (dark ? '#d0d0d0' : '#3d3d3d') + ';',
             'text-align:center;margin-bottom:4px;padding:0 2px;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-type{',
             'display:inline-block;background:' + pillBg + ';color:' + pillText + ';',
             'font-size:10px;font-weight:600;line-height:1;',
             'padding:2px 6px;border-radius:8px;margin-bottom:5px;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-card-stats{',
             'display:flex;align-items:center;justify-content:center;',
             'gap:5px;font-size:11px;font-weight:700;',
             'white-space:nowrap;',
+            'pointer-events:none;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-green{color:#00b06f;}',
             '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-blue{color:#0a84ff;}',
@@ -652,7 +659,36 @@
             'padding:60px 0;text-align:center;',
             '}',
 
-            '@keyframes nx-rap-spin{to{transform:rotate(360deg);}}'
+            '@keyframes nx-rap-spin{to{transform:rotate(360deg);}}',
+            '@keyframes nx-rap-shimmer{',
+            '0%{background-position:-200% 0;}',
+            '100%{background-position:200% 0;}',
+            '}',
+
+            '#' + MODAL_ID + ' .nx-rap-skel-card{',
+            'border-radius:6px;padding:6px;text-align:center;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-skel-thumb{',
+            'width:100%;aspect-ratio:1/1;border-radius:6px;',
+            'background:linear-gradient(90deg,',
+            skeleton1 + ' 0%,',
+            skeleton2 + ' 50%,',
+            skeleton1 + ' 100%);',
+            'background-size:200% 100%;',
+            'animation:nx-rap-shimmer 1.4s infinite;',
+            'margin-bottom:8px;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-skel-line{',
+            'height:11px;border-radius:5px;margin:0 auto 5px;',
+            'background:linear-gradient(90deg,',
+            skeleton1 + ' 0%,',
+            skeleton2 + ' 50%,',
+            skeleton1 + ' 100%);',
+            'background-size:200% 100%;',
+            'animation:nx-rap-shimmer 1.4s infinite;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-skel-line.l1{width:80%;}',
+            '#' + MODAL_ID + ' .nx-rap-skel-line.l2{width:55%;}'
         ].join('');
         document.head.appendChild(style);
     }
@@ -762,6 +798,41 @@
         });
 
         return overlay;
+    }
+
+    function paintSkeleton(n) {
+        var overlay = document.getElementById(OVERLAY_ID);
+        if (!overlay) return;
+        var body = overlay.querySelector('.nx-rap-body');
+
+        var ul = document.createElement('ul');
+        ul.className = 'hlist item-cards';
+
+        for (var i = 0; i < n; i++) {
+            var li = document.createElement('li');
+            li.className = 'list-item item-card';
+
+            var card = document.createElement('div');
+            card.className = 'nx-rap-skel-card';
+
+            var thumb = document.createElement('div');
+            thumb.className = 'nx-rap-skel-thumb';
+
+            var line1 = document.createElement('div');
+            line1.className = 'nx-rap-skel-line l1';
+
+            var line2 = document.createElement('div');
+            line2.className = 'nx-rap-skel-line l2';
+
+            card.appendChild(thumb);
+            card.appendChild(line1);
+            card.appendChild(line2);
+            li.appendChild(card);
+            ul.appendChild(li);
+        }
+
+        body.innerHTML = '';
+        body.appendChild(ul);
     }
 
     function paintSpinner() {
