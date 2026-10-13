@@ -178,12 +178,14 @@
     var MODAL_ID = 'nx-rap-modal';
     var MSG_OPEN = 'nx-rap-open-modal';
     var THUMB_BATCH = 'https://octane.wtf/apisite/thumbnails/v1/assets?assetIds=';
+    var DETAILS_URL = 'https://octomons.wtf/api/items/v3/itemdetails';
     var STYLE_ID = 'nx-rap-style';
 
     var isTop = window.top === window.self;
 
     var items = [];
     var thumbs = {};
+    var detailsCache = null;
     var sortBy = 'rap';
     var whoami = 'user';
     var rowScanner = null;
@@ -233,22 +235,62 @@
         return q.get('username') || q.get('viewerName') || '';
     }
 
-    function loadLimiteds(userId) {
-        return fetch('/apisite/inventory/v1/users/' + userId + '/assets/collectibles',
-                     { credentials: 'include' })
+    function loadDetails() {
+        if (detailsCache) return Promise.resolve(detailsCache);
+        return fetch(DETAILS_URL, { credentials: 'include' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (d) {
-                var list = (d && d.data) ? d.data : [];
-                var rap = 0;
-                var value = 0;
-                for (var i = 0; i < list.length; i++) {
-                    var p = Number(list[i].recentAveragePrice) || 0;
-                    rap += p;
-                    value += Number(list[i].originalPrice) || p;
-                }
-                return { list: list, rap: rap, value: value };
+                detailsCache = (d && d.success && d.assets) ? d.assets : {};
+                return detailsCache;
             })
-            .catch(function () { return { list: [], rap: 0, value: 0 }; });
+            .catch(function () {
+                detailsCache = {};
+                return {};
+            });
+    }
+
+    function loadLimiteds(userId) {
+        return Promise.all([
+            fetch('/apisite/inventory/v1/users/' + userId + '/assets/collectibles',
+                  { credentials: 'include' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) { return (d && d.data) ? d.data : []; })
+                .catch(function () { return []; }),
+            loadDetails()
+        ]).then(function (results) {
+            var list = results[0];
+            var details = results[1];
+            var out = [];
+            var rap = 0;
+            var value = 0;
+            for (var i = 0; i < list.length; i++) {
+                var item = list[i];
+                var id = String(item.assetId || item.id || '');
+                var d = details[id] || null;
+
+                var name = d ? d[0] : (item.name || '');
+                var itemRap = d ? Number(d[2]) : (Number(item.recentAveragePrice) || 0);
+                var itemValue = d ? Number(d[4]) : (Number(item.originalPrice) || itemRap);
+
+                if (!(itemRap > 0)) itemRap = 0;
+                if (!(itemValue > 0)) itemValue = itemRap;
+
+                out.push({
+                    assetId: id,
+                    id: id,
+                    name: name,
+                    recentAveragePrice: itemRap,
+                    originalPrice: itemValue,
+                    serialNumber: item.serialNumber,
+                    assetTypeId: item.assetTypeId || item.assetType,
+                    thumbnail: item.thumbnail
+                });
+
+                rap += itemRap;
+                value += itemValue;
+            }
+            return { list: out, rap: rap, value: value };
+        });
     }
 
     function loadThumbs(ids) {
