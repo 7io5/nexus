@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nexus [TESTER EXTENSION]
 // @namespace    https://github.com/7io5/nexus
-// @version      1.5
+// @version      1.5.2
 // @icon         https://github.com/7io5/nexus/blob/main/img/icon.png?raw=true
 // @author       7io5
 // @description  Testing stuff :)
@@ -18,7 +18,7 @@
 // @connect      roblox.com
 // @connect      raw.githubusercontent.com
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/7io5/nexus/testing/build/bundle.js?v=15.1
+// @require      https://raw.githubusercontent.com/7io5/nexus/testing/build/bundle.js?v=15.2
 // @downloadURL  https://raw.githubusercontent.com/7io5/nexus/testing/main.user.js
 // @updateURL    https://raw.githubusercontent.com/7io5/nexus/testing/main.user.js
 // ==/UserScript==
