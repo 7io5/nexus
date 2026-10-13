@@ -517,7 +517,7 @@
             'flex:none;gap:10px;background:' + (dark ? '#141414' : '#fafafa') + ';',
             '}',
 
-            '#' + MODAL_ID + ' .nx-rap-head-left{',
+            '#' + MODAL_ID + ' .nx-rap-titlewrap{',
             'flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;',
             '}',
 
@@ -529,10 +529,6 @@
             '#' + MODAL_ID + ' .nx-rap-subtitle{',
             'font-size:12px;font-weight:500;color:' + faded + ';',
             'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;',
-            '}',
-
-            '#' + MODAL_ID + ' .nx-rap-head-right{',
-            'display:flex;align-items:center;gap:10px;flex:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-export{position:relative;}',
@@ -582,7 +578,7 @@
             '#' + MODAL_ID + ' .nx-rap-body::-webkit-scrollbar-thumb:hover{background:' + scrollThumbHover + ';}',
 
             '#' + MODAL_ID + ' ul.hlist.item-cards{',
-            'display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));',
+            'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));',
             'gap:8px;padding:0;margin:0;list-style:none;',
             '}',
 
@@ -712,8 +708,8 @@
         var head = document.createElement('div');
         head.className = 'nx-rap-head';
 
-        var left = document.createElement('div');
-        left.className = 'nx-rap-head-left';
+        var titleWrap = document.createElement('div');
+        titleWrap.className = 'nx-rap-titlewrap';
 
         var title = document.createElement('span');
         title.className = 'nx-rap-title';
@@ -723,11 +719,8 @@
         subtitle.className = 'nx-rap-subtitle';
         subtitle.textContent = '-- RAP \u2022 -- Value';
 
-        left.appendChild(title);
-        left.appendChild(subtitle);
-
-        var right = document.createElement('div');
-        right.className = 'nx-rap-head-right';
+        titleWrap.appendChild(title);
+        titleWrap.appendChild(subtitle);
 
         var exportWrap = document.createElement('div');
         exportWrap.className = 'nx-rap-export';
@@ -768,11 +761,9 @@
         close.textContent = '\u00d7';
         close.onclick = closeModal;
 
-        right.appendChild(exportWrap);
-        right.appendChild(close);
-
-        head.appendChild(left);
-        head.appendChild(right);
+        head.appendChild(titleWrap);
+        head.appendChild(exportWrap);
+        head.appendChild(close);
 
         var body = document.createElement('div');
         body.className = 'nx-rap-body';
