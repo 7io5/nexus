@@ -186,7 +186,6 @@
     var items = [];
     var thumbs = {};
     var detailsCache = null;
-    var sortBy = 'rap';
     var whoami = 'user';
     var rowScanner = null;
 
@@ -237,16 +236,25 @@
 
     function loadDetails() {
         if (detailsCache) return Promise.resolve(detailsCache);
-        return fetch(DETAILS_URL, { credentials: 'include' })
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (d) {
-                detailsCache = (d && d.success && d.assets) ? d.assets : {};
-                return detailsCache;
-            })
-            .catch(function () {
-                detailsCache = {};
-                return {};
+        return new Promise(function (resolve) {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: DETAILS_URL,
+                onload: function (r) {
+                    try {
+                        var d = JSON.parse(r.responseText);
+                        detailsCache = (d && d.success && d.assets) ? d.assets : {};
+                    } catch (e) {
+                        detailsCache = {};
+                    }
+                    resolve(detailsCache);
+                },
+                onerror: function () {
+                    detailsCache = {};
+                    resolve({});
+                }
             });
+        });
     }
 
     function loadLimiteds(userId) {
@@ -262,7 +270,7 @@
             var details = results[1];
             var out = [];
             var rap = 0;
-            var value = 0;
+
             for (var i = 0; i < list.length; i++) {
                 var item = list[i];
                 var id = String(item.assetId || item.id || '');
@@ -270,26 +278,21 @@
 
                 var name = d ? d[0] : (item.name || '');
                 var itemRap = d ? Number(d[2]) : (Number(item.recentAveragePrice) || 0);
-                var itemValue = d ? Number(d[4]) : (Number(item.originalPrice) || itemRap);
-
                 if (!(itemRap > 0)) itemRap = 0;
-                if (!(itemValue > 0)) itemValue = itemRap;
 
                 out.push({
                     assetId: id,
                     id: id,
                     name: name,
                     recentAveragePrice: itemRap,
-                    originalPrice: itemValue,
                     serialNumber: item.serialNumber,
                     assetTypeId: item.assetTypeId || item.assetType,
                     thumbnail: item.thumbnail
                 });
 
                 rap += itemRap;
-                value += itemValue;
             }
-            return { list: out, rap: rap, value: value };
+            return { list: out, rap: rap };
         });
     }
 
@@ -338,26 +341,9 @@
     }
 
     function arrange() {
-        var out = items.slice();
-        if (sortBy === 'rap') {
-            out.sort(function (a, b) {
-                return (Number(b.recentAveragePrice) || 0) - (Number(a.recentAveragePrice) || 0);
-            });
-        } else if (sortBy === 'value') {
-            out.sort(function (a, b) {
-                var av = Number(a.originalPrice) || Number(a.recentAveragePrice) || 0;
-                var bv = Number(b.originalPrice) || Number(b.recentAveragePrice) || 0;
-                return bv - av;
-            });
-        } else if (sortBy === 'name') {
-            out.sort(function (a, b) {
-                return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
-            });
-        } else if (sortBy === 'serial') {
-            out = out.filter(function (it) { return serialNum(it) !== null; });
-            out.sort(function (a, b) { return serialNum(a) - serialNum(b); });
-        }
-        return out;
+        return items.slice().sort(function (a, b) {
+            return (Number(b.recentAveragePrice) || 0) - (Number(a.recentAveragePrice) || 0);
+        });
     }
 
     function asRow(item) {
@@ -365,7 +351,6 @@
         var slug = (item.name || '').trim().replace(/\s+/g, '-');
         var sn = serialNum(item);
         var rap = Number(item.recentAveragePrice) || 0;
-        var value = Number(item.originalPrice) || rap;
         return {
             name: item.name || '',
             assetId: id,
@@ -373,7 +358,6 @@
             serial: sn,
             serialText: sn === null ? 'N/A' : '#' + sn,
             rap: rap,
-            value: value,
             link: 'https://octane.wtf/catalog/' + id + (slug ? '/' + slug : '')
         };
     }
@@ -400,10 +384,10 @@
 
     function saveCsv() {
         if (!items.length) return;
-        var rows = [['Name', 'Asset ID', 'Type', 'Serial', 'RAP', 'Value', 'Link']];
+        var rows = [['Name', 'Asset ID', 'Type', 'Serial', 'RAP', 'Link']];
         arrange().forEach(function (item) {
             var r = asRow(item);
-            rows.push([r.name, r.assetId, r.assetType, r.serialText, r.rap, r.value, r.link]);
+            rows.push([r.name, r.assetId, r.assetType, r.serialText, r.rap, r.link]);
         });
         var text = rows.map(function (row) {
             return row.map(csvSafe).join(',');
@@ -419,7 +403,6 @@
             exportedAt: new Date().toISOString(),
             totalItems: list.length,
             totalRap: list.reduce(function (s, r) { return s + r.rap; }, 0),
-            totalValue: list.reduce(function (s, r) { return s + r.value; }, 0),
             items: list
         };
         saveFile(whoami + '-limiteds.json', JSON.stringify(payload, null, 2), 'application/json;charset=utf-8;');
@@ -429,16 +412,12 @@
         if (!items.length) return;
         var list = arrange();
         var totalRap = list.reduce(function (s, i) { return s + (Number(i.recentAveragePrice) || 0); }, 0);
-        var totalValue = list.reduce(function (s, i) {
-            return s + (Number(i.originalPrice) || Number(i.recentAveragePrice) || 0);
-        }, 0);
 
         var lines = [];
         lines.push(whoami + "'s Limiteds");
         lines.push('Exported: ' + new Date().toLocaleString());
         lines.push('Items: ' + list.length);
         lines.push('Total RAP: ' + totalRap);
-        lines.push('Total Value: ' + totalValue);
         lines.push('');
         lines.push('----------------------------------------');
 
@@ -447,8 +426,7 @@
             lines.push(r.name);
             lines.push('  Type: ' + r.assetType +
                        '  |  Serial: ' + r.serialText +
-                       '  |  RAP: ' + r.rap +
-                       '  |  Value: ' + r.value);
+                       '  |  RAP: ' + r.rap);
             lines.push('  ' + r.link);
             lines.push('');
         });
@@ -520,16 +498,6 @@
             '#' + MODAL_ID + ' .nx-rap-title{',
             'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
             '}',
-
-            '#' + MODAL_ID + ' .nx-rap-sort{',
-            'background:' + selectBg + ';color:' + panelText + ';',
-            'border:1px solid ' + selectEdge + ';border-radius:6px;',
-            'padding:5px 8px;font-size:12px;font-weight:500;',
-            'font-family:inherit;cursor:pointer;outline:none;',
-            'transition:background 0.12s ease;',
-            '}',
-            '#' + MODAL_ID + ' .nx-rap-sort:hover{background:' + btnHover + ';}',
-            '#' + MODAL_ID + ' .nx-rap-sort:focus{border-color:#0a84ff;}',
 
             '#' + MODAL_ID + ' .nx-rap-export{position:relative;}',
 
@@ -626,10 +594,6 @@
             'gap:5px;font-size:11px;font-weight:700;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-green{color:#00b06f;}',
-            '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-blue{color:#0a84ff;}',
-            '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-dot{',
-            'color:' + faded + ';font-weight:400;',
-            '}',
 
             '#' + MODAL_ID + ' .nx-rap-empty{',
             'padding:40px 0;text-align:center;color:' + faded + ';font-size:14px;',
@@ -691,25 +655,6 @@
         title.className = 'nx-rap-title';
         title.textContent = 'Limiteds';
 
-        var sort = document.createElement('select');
-        sort.className = 'nx-rap-sort';
-        [
-            ['rap', 'Sort: RAP \u2193'],
-            ['value', 'Sort: Value \u2193'],
-            ['name', 'Sort: Name A\u2192Z'],
-            ['serial', 'Sort: Serial \u2191']
-        ].forEach(function (opt) {
-            var o = document.createElement('option');
-            o.value = opt[0];
-            o.textContent = opt[1];
-            sort.appendChild(o);
-        });
-        sort.value = sortBy;
-        sort.onchange = function () {
-            sortBy = this.value;
-            paintGrid();
-        };
-
         var exportWrap = document.createElement('div');
         exportWrap.className = 'nx-rap-export';
 
@@ -750,7 +695,6 @@
         close.onclick = closeModal;
 
         head.appendChild(title);
-        head.appendChild(sort);
         head.appendChild(exportWrap);
         head.appendChild(close);
 
@@ -870,7 +814,6 @@
         }
 
         var rap = Number(item.recentAveragePrice) || 0;
-        var value = Number(item.originalPrice) || rap;
 
         var stats = document.createElement('div');
         stats.className = 'nx-rap-card-stats';
@@ -879,17 +822,7 @@
         rapEl.className = 'nx-rap-green';
         rapEl.textContent = shortNum(rap) + ' RAP';
 
-        var dot = document.createElement('span');
-        dot.className = 'nx-rap-dot';
-        dot.textContent = '\u2022';
-
-        var valEl = document.createElement('span');
-        valEl.className = 'nx-rap-blue';
-        valEl.textContent = shortNum(value) + ' Value';
-
         stats.appendChild(rapEl);
-        stats.appendChild(dot);
-        stats.appendChild(valEl);
         box.appendChild(stats);
 
         li.appendChild(box);
@@ -909,11 +842,6 @@
         var list = arrange();
 
         body.innerHTML = '';
-
-        if (!list.length) {
-            body.innerHTML = '<div class="nx-rap-empty">No serialized items to show.</div>';
-            return;
-        }
 
         var ul = document.createElement('ul');
         ul.className = 'hlist item-cards';
