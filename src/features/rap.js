@@ -19,6 +19,9 @@
     var whoami = 'user';
     var rowScanner = null;
 
+    var inflight = {};
+    var limitedsCache = {};
+
     var ASSET_TYPES = {
         1: 'Image', 2: 'T-Shirt', 3: 'Audio', 4: 'Mesh', 5: 'Lua',
         8: 'Hat', 9: 'Place', 10: 'Model', 11: 'Shirt', 12: 'Pants',
@@ -98,11 +101,14 @@
         });
     }
 
-    function loadLimiteds(userId) {
+    function fetchLimitedsRaw(userId) {
         return Promise.all([
             fetch('/apisite/inventory/v1/users/' + userId + '/assets/collectibles',
                   { credentials: 'include' })
-                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (r) {
+                    if (r.status === 429) throw new Error('429');
+                    return r.ok ? r.json() : null;
+                })
                 .then(function (d) { return (d && d.data) ? d.data : []; })
                 .catch(function () { return []; }),
             loadDetails()
@@ -143,6 +149,26 @@
             }
             return { list: out, rap: rap, value: value };
         });
+    }
+
+    function loadLimiteds(userId, force) {
+        var key = String(userId);
+        if (!force && limitedsCache[key]) {
+            return Promise.resolve(limitedsCache[key]);
+        }
+        if (!force && inflight[key]) {
+            return inflight[key];
+        }
+        var p = fetchLimitedsRaw(userId).then(function (data) {
+            limitedsCache[key] = data;
+            delete inflight[key];
+            return data;
+        }, function (err) {
+            delete inflight[key];
+            throw err;
+        });
+        inflight[key] = p;
+        return p;
     }
 
     function loadThumbs(ids) {
@@ -288,8 +314,7 @@
     }
 
     function applyStyle() {
-        var old = document.getElementById(STYLE_ID);
-        if (old) old.remove();
+        if (document.getElementById(STYLE_ID)) return;
 
         var dark = darkMode();
 
@@ -547,7 +572,7 @@
 
         var subtitle = document.createElement('span');
         subtitle.className = 'nx-rap-subtitle';
-        subtitle.textContent = '-- RAP \u2022 -- Value';
+        subtitle.textContent = '-- RAP | -- Value';
 
         titleWrap.appendChild(title);
         titleWrap.appendChild(subtitle);
@@ -749,7 +774,7 @@
 
         if (!items.length) {
             body.innerHTML = '<div class="nx-rap-empty">No limiteds found.</div>';
-            if (subtitle) subtitle.textContent = '-- RAP \u2022 -- Value';
+            if (subtitle) subtitle.textContent = '-- RAP | -- Value';
             return;
         }
 
@@ -769,7 +794,7 @@
 
         if (subtitle) {
             subtitle.textContent =
-                (rapUnknown ? '--' : shortNum(totalRap)) + ' RAP \u2022 ' +
+                (rapUnknown ? '--' : shortNum(totalRap)) + ' RAP | ' +
                 (valueUnknown ? '--' : shortNum(totalValue)) + ' Value';
         }
 
@@ -788,17 +813,30 @@
         var title = overlay.querySelector('.nx-rap-title');
         var subtitle = overlay.querySelector('.nx-rap-subtitle');
 
-        applyStyle();
-
         whoami = username || 'user';
         title.textContent = whoami + "'s Limiteds (0)";
-        if (subtitle) subtitle.textContent = '-- RAP \u2022 -- Value';
+        if (subtitle) subtitle.textContent = '-- RAP | -- Value';
         overlay.classList.add('nx-open');
 
         items = [];
         thumbs = {};
 
-        paintSpinner();
+        var cached = limitedsCache[String(userId)];
+        if (cached) {
+            items = cached.list;
+            title.textContent = whoami + "'s Limiteds (" + cached.list.length + ')';
+            var idsCached = cached.list.map(function (it) {
+                return it.assetId || it.id;
+            }).filter(Boolean);
+            paintSkeleton(idsCached.length || 12);
+            loadThumbs(idsCached).then(function (map) {
+                thumbs = map;
+                paintGrid();
+            });
+            return;
+        }
+
+        paintSkeleton(12);
 
         loadLimiteds(userId).then(function (data) {
             items = data.list;
@@ -807,7 +845,7 @@
                 title.textContent = whoami + "'s Limiteds (0)";
                 overlay.querySelector('.nx-rap-body').innerHTML =
                     '<div class="nx-rap-empty">No limiteds found.</div>';
-                if (subtitle) subtitle.textContent = '-- RAP \u2022 -- Value';
+                if (subtitle) subtitle.textContent = '-- RAP | -- Value';
                 return;
             }
 
@@ -926,11 +964,13 @@
     }
 
     function onThemeChange() {
+        var old = document.getElementById(STYLE_ID);
+        if (old) old.remove();
         applyStyle();
     }
 
     function onStorage(e) {
-        if (e.key === 'rbx_theme_v1') applyStyle();
+        if (e.key === 'rbx_theme_v1') onThemeChange();
     }
 
     var styleWatchBound = false;
@@ -938,14 +978,14 @@
     window.NX.features.rap = {
         apply: function () {
             if (isTop) {
+                if (styleWatchBound) return;
+                styleWatchBound = true;
                 window.addEventListener('message', onMessage);
-
-                if (!styleWatchBound) {
-                    styleWatchBound = true;
-                    window.addEventListener('octane-theme-change', onThemeChange);
-                    window.addEventListener('storage', onStorage);
-                }
+                window.addEventListener('octane-theme-change', onThemeChange);
+                window.addEventListener('storage', onStorage);
             } else {
+                var row = document.querySelector('.nx-rap-row');
+                if (row) return;
                 startRowScanner();
             }
         },
