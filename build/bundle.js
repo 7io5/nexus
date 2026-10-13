@@ -921,7 +921,7 @@
 
         var dot = document.createElement('span');
         dot.className = 'nx-rap-dot';
-        dot.textContent = '\u2022';
+        dot.textContent = '|';
 
         var valEl = document.createElement('span');
         valEl.className = 'nx-rap-blue';
