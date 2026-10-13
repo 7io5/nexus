@@ -1,5 +1,3 @@
-// src/features/rap.js
-
 (function () {
     'use strict';
 
@@ -10,25 +8,31 @@
     var MODAL_ID = 'nx-rap-modal';
     var MSG_OPEN = 'nx-rap-open-modal';
     var THUMB_BATCH = 'https://octane.wtf/apisite/thumbnails/v1/assets?assetIds=';
+    var DETAILS_URL = 'https://octomons.wtf/api/items/v3/itemdetails';
     var STYLE_ID = 'nx-rap-style';
-    var RAP_CACHE_PREFIX = 'nx_rap_';
 
     var isTop = window.top === window.self;
 
     var items = [];
     var thumbs = {};
-    var sortBy = 'rap';
+    var detailsCache = null;
     var whoami = 'user';
     var rowScanner = null;
-    var rowScannerDone = false;
-    var injected = false;
-    var bound = false;
+
+    var inflight = {};
+    var limitedsCache = {};
 
     var ASSET_TYPES = {
-        8: 'Hat',
-        18: 'Face',
-        19: 'Gear',
-        56: 'Emote Animation'
+        1: 'Image', 2: 'T-Shirt', 3: 'Audio', 4: 'Mesh', 5: 'Lua',
+        8: 'Hat', 9: 'Place', 10: 'Model', 11: 'Shirt', 12: 'Pants',
+        13: 'Decal', 17: 'Head', 18: 'Face', 19: 'Gear', 21: 'Badge',
+        24: 'Animation', 27: 'Torso', 28: 'Right Arm', 29: 'Left Arm',
+        30: 'Right Leg', 31: 'Left Leg', 32: 'Package',
+        37: 'Pose Animation', 38: 'Climb Animation', 40: 'Fall Animation',
+        41: 'Idle Animation', 42: 'Run Animation', 43: 'Swim Animation',
+        44: 'Walk Animation', 45: 'Emote Animation', 46: 'Mesh Part',
+        47: 'Solid Model', 48: 'Shatterbox', 56: 'Emote Animation',
+        61: 'Plugin', 62: 'Font Family'
     };
 
     function shortNum(n) {
@@ -40,6 +44,17 @@
         }
         var m = n / 1000000;
         return (m >= 100 ? Math.round(m) : m.toFixed(2).replace(/\.?0+$/, '')) + 'M';
+    }
+
+    function pickNum(v) {
+        if (v === null || v === undefined) return null;
+        var n = Number(v);
+        if (!isFinite(n) || n <= 0) return null;
+        return n;
+    }
+
+    function displayNum(v) {
+        return v === null ? '--' : shortNum(v);
     }
 
     function darkMode() {
@@ -63,41 +78,97 @@
         return q.get('username') || q.get('viewerName') || '';
     }
 
-    function cachedRap(userId) {
-        try {
-            var raw = sessionStorage.getItem(RAP_CACHE_PREFIX + userId);
-            if (!raw) return null;
-            var d = JSON.parse(raw);
-            if (!d || typeof d.rap !== 'number') return null;
-            if (Date.now() - d.t > 5 * 60 * 1000) return null;
-            return d.rap;
-        } catch (e) { return null; }
-    }
-
-    function cacheRap(userId, rap) {
-        try {
-            sessionStorage.setItem(RAP_CACHE_PREFIX + userId,
-                JSON.stringify({ rap: rap, t: Date.now() }));
-        } catch (e) {}
-    }
-
-    function loadLimiteds(userId) {
-        return fetch('/apisite/inventory/v1/users/' + userId + '/assets/collectibles',
-                     { credentials: 'include' })
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (d) {
-                var list = (d && d.data) ? d.data : [];
-                var rap = 0;
-                var value = 0;
-                for (var i = 0; i < list.length; i++) {
-                    var p = Number(list[i].recentAveragePrice) || 0;
-                    rap += p;
-                    value += Number(list[i].originalPrice) || p;
+    function loadDetails() {
+        if (detailsCache) return Promise.resolve(detailsCache);
+        return new Promise(function (resolve) {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: DETAILS_URL,
+                onload: function (r) {
+                    try {
+                        var d = JSON.parse(r.responseText);
+                        detailsCache = (d && d.success && d.assets) ? d.assets : {};
+                    } catch (e) {
+                        detailsCache = {};
+                    }
+                    resolve(detailsCache);
+                },
+                onerror: function () {
+                    detailsCache = {};
+                    resolve({});
                 }
-                cacheRap(userId, rap);
-                return { list: list, rap: rap, value: value };
-            })
-            .catch(function () { return { list: [], rap: 0, value: 0 }; });
+            });
+        });
+    }
+
+    function fetchLimitedsRaw(userId) {
+        return Promise.all([
+            fetch('/apisite/inventory/v1/users/' + userId + '/assets/collectibles',
+                  { credentials: 'include' })
+                .then(function (r) {
+                    if (r.status === 429) throw new Error('429');
+                    return r.ok ? r.json() : null;
+                })
+                .then(function (d) { return (d && d.data) ? d.data : []; })
+                .catch(function () { return []; }),
+            loadDetails()
+        ]).then(function (results) {
+            var list = results[0];
+            var details = results[1];
+            var out = [];
+            var rap = 0;
+            var value = 0;
+
+            for (var i = 0; i < list.length; i++) {
+                var item = list[i];
+                var id = String(item.assetId || item.id || '');
+                var d = details[id] || null;
+
+                var name = d ? d[0] : (item.name || '');
+                var rawRap = d ? pickNum(d[2]) : pickNum(item.recentAveragePrice);
+                var rawValue = d ? pickNum(d[4]) : pickNum(item.originalPrice);
+
+                var itemRap = rawRap === null ? 0 : rawRap;
+                var itemValue = rawValue === null ? itemRap : rawValue;
+
+                out.push({
+                    assetId: id,
+                    id: id,
+                    name: name,
+                    recentAveragePrice: itemRap,
+                    originalPrice: itemValue,
+                    rapDisplay: displayNum(rawRap),
+                    valueDisplay: displayNum(rawValue),
+                    serialNumber: item.serialNumber,
+                    assetTypeId: item.assetTypeId || item.assetType,
+                    thumbnail: item.thumbnail
+                });
+
+                rap += itemRap;
+                value += itemValue;
+            }
+            return { list: out, rap: rap, value: value };
+        });
+    }
+
+    function loadLimiteds(userId, force) {
+        var key = String(userId);
+        if (!force && limitedsCache[key]) {
+            return Promise.resolve(limitedsCache[key]);
+        }
+        if (!force && inflight[key]) {
+            return inflight[key];
+        }
+        var p = fetchLimitedsRaw(userId).then(function (data) {
+            limitedsCache[key] = data;
+            delete inflight[key];
+            return data;
+        }, function (err) {
+            delete inflight[key];
+            throw err;
+        });
+        inflight[key] = p;
+        return p;
     }
 
     function loadThumbs(ids) {
@@ -134,7 +205,7 @@
         if (v == null) return '';
         if (typeof v === 'string' && !/^\d+$/.test(v)) return v;
         var id = parseInt(v, 10);
-        return ASSET_TYPES[id] || '';
+        return ASSET_TYPES[id] || ('Type ' + id);
     }
 
     function serialNum(item) {
@@ -145,42 +216,23 @@
     }
 
     function arrange() {
-        var out = items.slice();
-        if (sortBy === 'rap') {
-            out.sort(function (a, b) {
-                return (Number(b.recentAveragePrice) || 0) - (Number(a.recentAveragePrice) || 0);
-            });
-        } else if (sortBy === 'value') {
-            out.sort(function (a, b) {
-                var av = Number(a.originalPrice) || Number(a.recentAveragePrice) || 0;
-                var bv = Number(b.originalPrice) || Number(b.recentAveragePrice) || 0;
-                return bv - av;
-            });
-        } else if (sortBy === 'name') {
-            out.sort(function (a, b) {
-                return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
-            });
-        } else if (sortBy === 'serial') {
-            out = out.filter(function (it) { return serialNum(it) !== null; });
-            out.sort(function (a, b) { return serialNum(a) - serialNum(b); });
-        }
-        return out;
+        return items.slice().sort(function (a, b) {
+            return (Number(b.recentAveragePrice) || 0) - (Number(a.recentAveragePrice) || 0);
+        });
     }
 
     function asRow(item) {
         var id = item.assetId || item.id || '';
         var slug = (item.name || '').trim().replace(/\s+/g, '-');
         var sn = serialNum(item);
-        var rap = Number(item.recentAveragePrice) || 0;
-        var value = Number(item.originalPrice) || rap;
         return {
             name: item.name || '',
             assetId: id,
             assetType: assetTypeName(item),
             serial: sn,
             serialText: sn === null ? 'N/A' : '#' + sn,
-            rap: rap,
-            value: value,
+            rap: item.rapDisplay,
+            value: item.valueDisplay,
             link: 'https://octane.wtf/catalog/' + id + (slug ? '/' + slug : '')
         };
     }
@@ -225,8 +277,8 @@
             username: whoami,
             exportedAt: new Date().toISOString(),
             totalItems: list.length,
-            totalRap: list.reduce(function (s, r) { return s + r.rap; }, 0),
-            totalValue: list.reduce(function (s, r) { return s + r.value; }, 0),
+            totalRap: list.reduce(function (s, r) { return s + (Number(r.rap) || 0); }, 0),
+            totalValue: list.reduce(function (s, r) { return s + (Number(r.value) || 0); }, 0),
             items: list
         };
         saveFile(whoami + '-limiteds.json', JSON.stringify(payload, null, 2), 'application/json;charset=utf-8;');
@@ -236,9 +288,7 @@
         if (!items.length) return;
         var list = arrange();
         var totalRap = list.reduce(function (s, i) { return s + (Number(i.recentAveragePrice) || 0); }, 0);
-        var totalValue = list.reduce(function (s, i) {
-            return s + (Number(i.originalPrice) || Number(i.recentAveragePrice) || 0);
-        }, 0);
+        var totalValue = list.reduce(function (s, i) { return s + (Number(i.originalPrice) || 0); }, 0);
 
         var lines = [];
         lines.push(whoami + "'s Limiteds");
@@ -264,36 +314,35 @@
     }
 
     function applyStyle() {
-        var old = document.getElementById(STYLE_ID);
-        if (old) old.remove();
+        if (document.getElementById(STYLE_ID)) return;
 
         var dark = darkMode();
 
-        var panelBg = dark
-            ? 'linear-gradient(180deg, rgba(38,40,43,0.98) 0%, rgba(35,37,39,0.98) 100%)'
-            : 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%)';
-        var panelText = dark ? '#bdbebe' : '#343434';
-        var heading = dark ? '#ffffff' : '#343434';
-        var panelEdge = dark ? 'rgba(101,102,104,0.6)' : 'rgba(199,203,206,0.7)';
-        var headEdge = dark ? 'rgba(57,59,61,0.9)' : 'rgba(224,227,229,0.9)';
-        var faded = dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
-        var thumbBg = dark ? 'rgba(57,59,61,0.6)' : 'rgba(242,244,245,0.8)';
-        var thumbHover = dark ? 'rgba(74,77,80,0.85)' : 'rgba(228,231,233,0.95)';
-        var selectBg = dark ? 'rgba(57,59,61,0.8)' : 'rgba(255,255,255,0.9)';
-        var selectEdge = dark ? 'rgba(101,102,104,0.6)' : 'rgba(199,203,206,0.7)';
-        var skeleton1 = dark ? 'rgba(44,46,48,0.6)' : 'rgba(232,234,236,0.6)';
-        var skeleton2 = dark ? 'rgba(58,61,64,0.85)' : 'rgba(244,246,248,0.9)';
+        var panelBg = dark ? '#121212' : '#ffffff';
+        var panelText = dark ? '#bdbebe' : '#3d3d3d';
+        var heading = dark ? '#ffffff' : '#202124';
+        var panelEdge = dark ? '#262626' : '#e4e4e4';
+        var headEdge = dark ? '#1c1c1c' : '#efefef';
+        var faded = dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+        var thumbBg = dark ? '#1c1c1c' : '#f4f4f4';
+        var skeleton1 = dark ? '#1e1e1e' : '#eeeeee';
+        var skeleton2 = dark ? '#2c2c2c' : '#f8f8f8';
         var pillBg = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
         var pillText = dark ? '#bdbebe' : '#606162';
-        var serialBg = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-        var serialText = dark ? '#bdbebe' : '#606162';
-        var btnBg = dark ? 'rgba(57,59,61,0.8)' : 'rgba(255,255,255,0.9)';
-        var btnEdge = dark ? 'rgba(101,102,104,0.6)' : 'rgba(199,203,206,0.7)';
-        var btnText = dark ? '#bdbebe' : '#343434';
-        var btnHover = dark ? 'rgba(74,77,80,0.9)' : 'rgba(228,231,233,0.95)';
-        var menuBg = dark ? 'rgba(45,47,50,0.98)' : 'rgba(255,255,255,0.98)';
-        var menuEdge = dark ? 'rgba(101,102,104,0.7)' : 'rgba(199,203,206,0.8)';
-        var menuHover = dark ? 'rgba(74,77,80,0.9)' : 'rgba(228,231,233,0.95)';
+        var serialBg = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)';
+        var serialText = dark ? '#e0e0e0' : '#3d3d3d';
+        var btnBg = dark ? '#1c1c1c' : '#f2f2f2';
+        var btnEdge = dark ? '#2c2c2c' : '#e4e4e4';
+        var btnText = dark ? '#d0d0d0' : '#3d3d3d';
+        var btnHover = dark ? '#262626' : '#e8e8e8';
+        var menuBg = dark ? '#181818' : '#ffffff';
+        var menuEdge = dark ? '#2c2c2c' : '#e4e4e4';
+        var menuHover = dark ? '#222222' : '#f2f2f2';
+        var scrollTrack = dark ? '#141414' : '#f0f0f0';
+        var scrollThumb = dark ? '#2e2e2e' : '#c8c8c8';
+        var scrollThumbHover = dark ? '#3a3a3a' : '#b0b0b0';
+        var spinner = dark ? '#e0e0e0' : '#3d3d3d';
+        var spinnerTrack = dark ? '#262626' : '#e4e4e4';
 
         var style = document.createElement('style');
         style.id = STYLE_ID;
@@ -311,32 +360,31 @@
             'border:1px solid ' + panelEdge + ';border-radius:10px;',
             'width:min(92vw,1000px);height:min(85vh,720px);',
             'display:flex;flex-direction:column;overflow:hidden;',
-            'box-shadow:0 12px 40px rgba(0,0,0,0.45);',
+            'box-shadow:0 12px 40px rgba(0,0,0,0.55);',
             'font-family:"HCo Gotham SSm","Helvetica Neue",Helvetica,Arial,sans-serif;',
             'transform:scale(0.98);transition:transform 0.15s ease;',
             '}',
             '#' + OVERLAY_ID + '.nx-open #' + MODAL_ID + '{transform:scale(1);}',
 
             '#' + MODAL_ID + ' .nx-rap-head{',
-            'display:flex;align-items:center;justify-content:space-between;',
+            'display:flex;align-items:flex-start;justify-content:space-between;',
             'padding:14px 18px;border-bottom:1px solid ' + headEdge + ';',
-            'font-weight:700;font-size:15px;flex:none;color:' + heading + ';',
-            'gap:10px;background:rgba(0,0,0,0.02);',
+            'flex:none;gap:10px;background:' + (dark ? '#141414' : '#fafafa') + ';',
+            '}',
+
+            '#' + MODAL_ID + ' .nx-rap-titlewrap{',
+            'flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-title{',
-            'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
+            'font-weight:700;font-size:15px;color:' + heading + ';',
+            'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
             '}',
 
-            '#' + MODAL_ID + ' .nx-rap-sort{',
-            'background:' + selectBg + ';color:' + panelText + ';',
-            'border:1px solid ' + selectEdge + ';border-radius:6px;',
-            'padding:5px 8px;font-size:12px;font-weight:500;',
-            'font-family:inherit;cursor:pointer;outline:none;',
-            'transition:background 0.12s ease;',
+            '#' + MODAL_ID + ' .nx-rap-subtitle{',
+            'font-size:12px;font-weight:500;color:' + faded + ';',
+            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;',
             '}',
-            '#' + MODAL_ID + ' .nx-rap-sort:hover{background:' + btnHover + ';}',
-            '#' + MODAL_ID + ' .nx-rap-sort:focus{border-color:#0a84ff;}',
 
             '#' + MODAL_ID + ' .nx-rap-export{position:relative;}',
 
@@ -353,7 +401,7 @@
             'position:absolute;top:calc(100% + 4px);right:0;',
             'min-width:120px;background:' + menuBg + ';',
             'border:1px solid ' + menuEdge + ';border-radius:6px;',
-            'box-shadow:0 8px 24px rgba(0,0,0,0.35);',
+            'box-shadow:0 8px 24px rgba(0,0,0,0.55);',
             'padding:4px;display:none;z-index:10;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-export-menu.open{display:block;}',
@@ -376,10 +424,16 @@
 
             '#' + MODAL_ID + ' .nx-rap-body{',
             'padding:16px 18px 20px;overflow-y:auto;flex:1;',
+            'scrollbar-width:thin;',
+            'scrollbar-color:' + scrollThumb + ' ' + scrollTrack + ';',
             '}',
+            '#' + MODAL_ID + ' .nx-rap-body::-webkit-scrollbar{width:10px;height:10px;}',
+            '#' + MODAL_ID + ' .nx-rap-body::-webkit-scrollbar-track{background:' + scrollTrack + ';border-radius:5px;}',
+            '#' + MODAL_ID + ' .nx-rap-body::-webkit-scrollbar-thumb{background:' + scrollThumb + ';border-radius:5px;border:2px solid ' + scrollTrack + ';}',
+            '#' + MODAL_ID + ' .nx-rap-body::-webkit-scrollbar-thumb:hover{background:' + scrollThumbHover + ';}',
 
             '#' + MODAL_ID + ' ul.hlist.item-cards{',
-            'display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));',
+            'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));',
             'gap:8px;padding:0;margin:0;list-style:none;',
             '}',
 
@@ -387,10 +441,10 @@
 
             '#' + MODAL_ID + ' .item-card-container{',
             'background:transparent;border-radius:6px;padding:6px;',
-            'text-align:center;transition:background 0.15s;',
+            'text-align:center;',
             '}',
 
-            '#' + MODAL_ID + ' .item-card-link{color:inherit;text-decoration:none;display:block;}',
+            '#' + MODAL_ID + ' .item-card-link{color:inherit;text-decoration:none;display:block;position:relative;z-index:1;}',
             '#' + MODAL_ID + ' .item-card-link:hover{text-decoration:none;color:inherit;}',
 
             '#' + MODAL_ID + ' .item-card-thumb-container{',
@@ -398,14 +452,13 @@
             'background:' + thumbBg + ';border-radius:6px;',
             'overflow:hidden;margin-bottom:8px;',
             'align-items:center;justify-content:center;',
-            'transition:background 0.15s;position:relative;',
-            '}',
-            '#' + MODAL_ID + ' .item-card-link:hover .item-card-thumb-container{',
-            'background:' + thumbHover + ';',
+            'position:relative;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .item-card-thumb-container img{',
             'width:100%;height:100%;object-fit:contain;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-serial{',
@@ -418,19 +471,23 @@
             '#' + MODAL_ID + ' .item-card-name{',
             'font-size:12px;font-weight:500;line-height:1.3;',
             'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
-            'color:' + (dark ? '#bdbebe' : '#343434') + ';',
+            'color:' + (dark ? '#d0d0d0' : '#3d3d3d') + ';',
             'text-align:center;margin-bottom:4px;padding:0 2px;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-type{',
             'display:inline-block;background:' + pillBg + ';color:' + pillText + ';',
             'font-size:10px;font-weight:600;line-height:1;',
             'padding:2px 6px;border-radius:8px;margin-bottom:5px;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-card-stats{',
             'display:flex;align-items:center;justify-content:center;',
             'gap:5px;font-size:11px;font-weight:700;',
+            'white-space:nowrap;',
+            'pointer-events:none;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-green{color:#00b06f;}',
             '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-blue{color:#0a84ff;}',
@@ -442,6 +499,18 @@
             'padding:40px 0;text-align:center;color:' + faded + ';font-size:14px;',
             '}',
 
+            '#' + MODAL_ID + ' .nx-rap-spinner{',
+            'width:34px;height:34px;margin:0 auto;',
+            'border:3px solid ' + spinnerTrack + ';',
+            'border-top-color:' + spinner + ';',
+            'border-radius:50%;',
+            'animation:nx-rap-spin 0.8s linear infinite;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-loading{',
+            'padding:60px 0;text-align:center;',
+            '}',
+
+            '@keyframes nx-rap-spin{to{transform:rotate(360deg);}}',
             '@keyframes nx-rap-shimmer{',
             '0%{background-position:-200% 0;}',
             '100%{background-position:200% 0;}',
@@ -494,28 +563,19 @@
         var head = document.createElement('div');
         head.className = 'nx-rap-head';
 
+        var titleWrap = document.createElement('div');
+        titleWrap.className = 'nx-rap-titlewrap';
+
         var title = document.createElement('span');
         title.className = 'nx-rap-title';
         title.textContent = 'Limiteds';
 
-        var sort = document.createElement('select');
-        sort.className = 'nx-rap-sort';
-        [
-            ['rap', 'Sort: RAP \u2193'],
-            ['value', 'Sort: Value \u2193'],
-            ['name', 'Sort: Name A\u2192Z'],
-            ['serial', 'Sort: Serial \u2191']
-        ].forEach(function (opt) {
-            var o = document.createElement('option');
-            o.value = opt[0];
-            o.textContent = opt[1];
-            sort.appendChild(o);
-        });
-        sort.value = sortBy;
-        sort.onchange = function () {
-            sortBy = this.value;
-            paintGrid();
-        };
+        var subtitle = document.createElement('span');
+        subtitle.className = 'nx-rap-subtitle';
+        subtitle.textContent = '-- RAP | -- Value';
+
+        titleWrap.appendChild(title);
+        titleWrap.appendChild(subtitle);
 
         var exportWrap = document.createElement('div');
         exportWrap.className = 'nx-rap-export';
@@ -556,8 +616,7 @@
         close.textContent = '\u00d7';
         close.onclick = closeModal;
 
-        head.appendChild(title);
-        head.appendChild(sort);
+        head.appendChild(titleWrap);
         head.appendChild(exportWrap);
         head.appendChild(close);
 
@@ -622,6 +681,13 @@
         body.appendChild(ul);
     }
 
+    function paintSpinner() {
+        var overlay = document.getElementById(OVERLAY_ID);
+        if (!overlay) return;
+        var body = overlay.querySelector('.nx-rap-body');
+        body.innerHTML = '<div class="nx-rap-loading"><div class="nx-rap-spinner"></div></div>';
+    }
+
     function makeCard(item) {
         var li = document.createElement('li');
         li.className = 'list-item item-card';
@@ -676,23 +742,20 @@
             box.appendChild(typeEl);
         }
 
-        var rap = Number(item.recentAveragePrice) || 0;
-        var value = Number(item.originalPrice) || rap;
-
         var stats = document.createElement('div');
         stats.className = 'nx-rap-card-stats';
 
         var rapEl = document.createElement('span');
         rapEl.className = 'nx-rap-green';
-        rapEl.textContent = shortNum(rap) + ' RAP';
+        rapEl.textContent = item.rapDisplay + ' RAP';
 
         var dot = document.createElement('span');
         dot.className = 'nx-rap-dot';
-        dot.textContent = '\u2022';
+        dot.textContent = '|';
 
         var valEl = document.createElement('span');
         valEl.className = 'nx-rap-blue';
-        valEl.textContent = shortNum(value) + ' Value';
+        valEl.textContent = item.valueDisplay + ' Value';
 
         stats.appendChild(rapEl);
         stats.appendChild(dot);
@@ -707,20 +770,35 @@
         var overlay = document.getElementById(OVERLAY_ID);
         if (!overlay) return;
         var body = overlay.querySelector('.nx-rap-body');
+        var subtitle = overlay.querySelector('.nx-rap-subtitle');
 
         if (!items.length) {
             body.innerHTML = '<div class="nx-rap-empty">No limiteds found.</div>';
+            if (subtitle) subtitle.textContent = '-- RAP | -- Value';
             return;
         }
 
         var list = arrange();
 
-        body.innerHTML = '';
+        var totalRap = 0;
+        var totalValue = 0;
+        var rapUnknown = false;
+        var valueUnknown = false;
 
-        if (!list.length) {
-            body.innerHTML = '<div class="nx-rap-empty">No serialized items to show.</div>';
-            return;
+        for (var k = 0; k < list.length; k++) {
+            totalRap += Number(list[k].recentAveragePrice) || 0;
+            totalValue += Number(list[k].originalPrice) || 0;
+            if (list[k].rapDisplay === '--') rapUnknown = true;
+            if (list[k].valueDisplay === '--') valueUnknown = true;
         }
+
+        if (subtitle) {
+            subtitle.textContent =
+                (rapUnknown ? '--' : shortNum(totalRap)) + ' RAP | ' +
+                (valueUnknown ? '--' : shortNum(totalValue)) + ' Value';
+        }
+
+        body.innerHTML = '';
 
         var ul = document.createElement('ul');
         ul.className = 'hlist item-cards';
@@ -733,15 +811,30 @@
     function openModal(userId, username) {
         var overlay = buildModal();
         var title = overlay.querySelector('.nx-rap-title');
-
-        applyStyle();
+        var subtitle = overlay.querySelector('.nx-rap-subtitle');
 
         whoami = username || 'user';
-        title.textContent = whoami + "'s Limiteds";
+        title.textContent = whoami + "'s Limiteds (0)";
+        if (subtitle) subtitle.textContent = '-- RAP | -- Value';
         overlay.classList.add('nx-open');
 
         items = [];
         thumbs = {};
+
+        var cached = limitedsCache[String(userId)];
+        if (cached) {
+            items = cached.list;
+            title.textContent = whoami + "'s Limiteds (" + cached.list.length + ')';
+            var idsCached = cached.list.map(function (it) {
+                return it.assetId || it.id;
+            }).filter(Boolean);
+            paintSkeleton(idsCached.length || 12);
+            loadThumbs(idsCached).then(function (map) {
+                thumbs = map;
+                paintGrid();
+            });
+            return;
+        }
 
         paintSkeleton(12);
 
@@ -752,6 +845,7 @@
                 title.textContent = whoami + "'s Limiteds (0)";
                 overlay.querySelector('.nx-rap-body').innerHTML =
                     '<div class="nx-rap-empty">No limiteds found.</div>';
+                if (subtitle) subtitle.textContent = '-- RAP | -- Value';
                 return;
             }
 
@@ -775,18 +869,24 @@
     }
 
     function injectRow() {
-        if (injected) return true;
-
         var userId = currentUserId();
-        if (!userId) return false;
+        if (!userId) return true;
 
         var list = document.querySelector('.details-info');
         if (!list) return false;
+        if (list.querySelector('.nx-rap-row')) return true;
 
-        var rows = list.querySelectorAll(':scope > li');
-        if (!rows.length) return false;
+        var rows = list.querySelectorAll('li');
+        var anchor = null;
+        for (var i = 0; i < rows.length; i++) {
+            var lbl = rows[i].querySelector('.text-label');
+            if (lbl && (lbl.textContent || '').trim() === 'Following') {
+                anchor = rows[i];
+                break;
+            }
+        }
+        if (!anchor) return false;
 
-        var anchor = rows[rows.length - 1];
         var li = anchor.cloneNode(true);
         li.classList.add('nx-rap-row');
 
@@ -803,9 +903,11 @@
 
         var span = li.querySelector('.font-header-2');
         if (span) {
+            span.textContent = '\u2026';
             span.removeAttribute('ng-bind');
             span.removeAttribute('data-ng-bind');
             span.classList.remove('ng-binding');
+
             span.style.cursor = 'pointer';
             span.title = tip;
             span.addEventListener('click', function (e) {
@@ -813,16 +915,6 @@
                 e.stopPropagation();
                 window.top.postMessage({ type: MSG_OPEN, userId: userId, username: name }, '*');
             });
-
-            var cached = cachedRap(userId);
-            if (cached !== null) {
-                span.textContent = shortNum(cached);
-            } else {
-                span.textContent = '\u2026';
-                loadLimiteds(userId).then(function (data) {
-                    span.textContent = shortNum(data.rap);
-                });
-            }
         }
 
         var link = li.querySelector('a.text-name');
@@ -839,40 +931,23 @@
         }
 
         list.appendChild(li);
-        injected = true;
+
+        loadLimiteds(userId).then(function (data) {
+            if (!span) return;
+            span.textContent = shortNum(data.rap);
+            span.setAttribute('title', tip);
+        });
+
         return true;
     }
 
     function startRowScanner() {
         stopRowScanner();
-        rowScannerDone = false;
-
-        var burstEnd = Date.now() + 1000;
-        var burst = setInterval(function () {
-            if (injectRow()) {
-                clearInterval(burst);
-                rowScannerDone = true;
-                return;
-            }
-            if (Date.now() > burstEnd) clearInterval(burst);
-        }, 40);
-
+        var tries = 0;
         rowScanner = setInterval(function () {
-            if (rowScannerDone) {
-                stopRowScanner();
-                return;
-            }
-            if (injectRow()) {
-                rowScannerDone = true;
-                stopRowScanner();
-            }
-        }, 500);
-
-        if (injectRow()) {
-            rowScannerDone = true;
-            clearInterval(burst);
-            stopRowScanner();
-        }
+            if (injectRow() || ++tries > 120) stopRowScanner();
+        }, 250);
+        injectRow();
     }
 
     function stopRowScanner() {
@@ -889,37 +964,40 @@
     }
 
     function onThemeChange() {
+        var old = document.getElementById(STYLE_ID);
+        if (old) old.remove();
         applyStyle();
     }
 
     function onStorage(e) {
-        if (e.key === 'rbx_theme_v1') applyStyle();
+        if (e.key === 'rbx_theme_v1') onThemeChange();
     }
+
+    var styleWatchBound = false;
 
     window.NX.features.rap = {
         apply: function () {
             if (isTop) {
-                if (!bound) {
-                    bound = true;
-                    window.addEventListener('message', onMessage);
-                    window.addEventListener('octane-theme-change', onThemeChange);
-                    window.addEventListener('storage', onStorage);
-                }
-            } else if (location.pathname.indexOf('/theme2020/users/') === 0) {
+                if (styleWatchBound) return;
+                styleWatchBound = true;
+                window.addEventListener('message', onMessage);
+                window.addEventListener('octane-theme-change', onThemeChange);
+                window.addEventListener('storage', onStorage);
+            } else {
+                var row = document.querySelector('.nx-rap-row');
+                if (row) return;
                 startRowScanner();
             }
         },
         teardown: function () {
             stopRowScanner();
-            injected = false;
-            rowScannerDone = false;
 
             if (isTop) {
-                if (bound) {
-                    bound = false;
-                    window.removeEventListener('message', onMessage);
+                window.removeEventListener('message', onMessage);
+                if (styleWatchBound) {
                     window.removeEventListener('octane-theme-change', onThemeChange);
                     window.removeEventListener('storage', onStorage);
+                    styleWatchBound = false;
                 }
                 closeModal();
                 var overlay = document.getElementById(OVERLAY_ID);
@@ -933,3 +1011,5 @@
         }
     };
 })();
+
+// boom
