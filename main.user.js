@@ -17,6 +17,7 @@
 // @connect      www.roblox.com
 // @connect      roblox.com
 // @connect      raw.githubusercontent.com
+// @connect      octomons.wtf
 // @run-at       document-start
 // @require      https://raw.githubusercontent.com/7io5/nexus/testing/build/bundle.js?v=15.2
 // @downloadURL  https://raw.githubusercontent.com/7io5/nexus/testing/main.user.js
