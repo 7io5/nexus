@@ -33,9 +33,7 @@
     };
 
     function shortNum(n) {
-        if (n === null || n === undefined || n < 0) return '--';
         n = Number(n) || 0;
-        if (n === 0) return '0';
         if (n < 1000) return String(n);
         if (n < 1000000) {
             var k = n / 1000;
@@ -89,12 +87,6 @@
         });
     }
 
-    function pickNum(v) {
-        var n = Number(v);
-        if (!isFinite(n) || n < 0) return null;
-        return n;
-    }
-
     function loadLimiteds(userId) {
         return Promise.all([
             fetch('/apisite/inventory/v1/users/' + userId + '/assets/collectibles',
@@ -116,20 +108,18 @@
                 var d = details[id] || null;
 
                 var name = d ? d[0] : (item.name || '');
-                var rawRap = d ? pickNum(d[2]) : pickNum(item.recentAveragePrice);
-                var rawValue = d ? pickNum(d[4]) : pickNum(item.originalPrice);
+                var itemRap = d ? Number(d[2]) : (Number(item.recentAveragePrice) || 0);
+                var itemValue = d ? Number(d[4]) : (Number(item.originalPrice) || 0);
 
-                var itemRap = rawRap === null ? 0 : rawRap;
-                var itemValue = rawValue === null ? 0 : rawValue;
+                if (!(itemRap > 0)) itemRap = 0;
+                if (!(itemValue > 0)) itemValue = itemRap;
 
                 out.push({
                     assetId: id,
                     id: id,
                     name: name,
-                    rap: itemRap,
-                    value: itemValue,
-                    rapDisplay: rawRap === null ? '--' : shortNum(rawRap),
-                    valueDisplay: rawValue === null ? '--' : shortNum(rawValue),
+                    recentAveragePrice: itemRap,
+                    originalPrice: itemValue,
                     serialNumber: item.serialNumber,
                     assetTypeId: item.assetTypeId || item.assetType,
                     thumbnail: item.thumbnail
@@ -188,7 +178,7 @@
 
     function arrange() {
         return items.slice().sort(function (a, b) {
-            return (Number(b.rap) || 0) - (Number(a.rap) || 0);
+            return (Number(b.recentAveragePrice) || 0) - (Number(a.recentAveragePrice) || 0);
         });
     }
 
@@ -196,14 +186,16 @@
         var id = item.assetId || item.id || '';
         var slug = (item.name || '').trim().replace(/\s+/g, '-');
         var sn = serialNum(item);
+        var rap = Number(item.recentAveragePrice) || 0;
+        var value = Number(item.originalPrice) || rap;
         return {
             name: item.name || '',
             assetId: id,
             assetType: assetTypeName(item),
             serial: sn,
             serialText: sn === null ? 'N/A' : '#' + sn,
-            rap: item.rapDisplay,
-            value: item.valueDisplay,
+            rap: rap,
+            value: value,
             link: 'https://octane.wtf/catalog/' + id + (slug ? '/' + slug : '')
         };
     }
@@ -248,6 +240,8 @@
             username: whoami,
             exportedAt: new Date().toISOString(),
             totalItems: list.length,
+            totalRap: list.reduce(function (s, r) { return s + r.rap; }, 0),
+            totalValue: list.reduce(function (s, r) { return s + r.value; }, 0),
             items: list
         };
         saveFile(whoami + '-limiteds.json', JSON.stringify(payload, null, 2), 'application/json;charset=utf-8;');
@@ -256,11 +250,15 @@
     function saveTxt() {
         if (!items.length) return;
         var list = arrange();
+        var totalRap = list.reduce(function (s, i) { return s + (Number(i.recentAveragePrice) || 0); }, 0);
+        var totalValue = list.reduce(function (s, i) { return s + (Number(i.originalPrice) || 0); }, 0);
 
         var lines = [];
         lines.push(whoami + "'s Limiteds");
         lines.push('Exported: ' + new Date().toLocaleString());
         lines.push('Items: ' + list.length);
+        lines.push('Total RAP: ' + totalRap);
+        lines.push('Total Value: ' + totalValue);
         lines.push('');
         lines.push('----------------------------------------');
 
@@ -291,6 +289,8 @@
         var headEdge = dark ? '#1c1c1c' : '#efefef';
         var faded = dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
         var thumbBg = dark ? '#1c1c1c' : '#f4f4f4';
+        var skeleton1 = dark ? '#1e1e1e' : '#eeeeee';
+        var skeleton2 = dark ? '#2c2c2c' : '#f8f8f8';
         var pillBg = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
         var pillText = dark ? '#bdbebe' : '#606162';
         var serialBg = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)';
@@ -412,7 +412,7 @@
             'text-align:center;',
             '}',
 
-            '#' + MODAL_ID + ' .item-card-link{color:inherit;text-decoration:none;display:block;}',
+            '#' + MODAL_ID + ' .item-card-link{color:inherit;text-decoration:none;display:block;position:relative;z-index:1;}',
             '#' + MODAL_ID + ' .item-card-link:hover{text-decoration:none;color:inherit;}',
 
             '#' + MODAL_ID + ' .item-card-thumb-container{',
@@ -421,10 +421,12 @@
             'overflow:hidden;margin-bottom:8px;',
             'align-items:center;justify-content:center;',
             'position:relative;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .item-card-thumb-container img{',
             'width:100%;height:100%;object-fit:contain;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-serial{',
@@ -439,18 +441,21 @@
             'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
             'color:' + (dark ? '#d0d0d0' : '#3d3d3d') + ';',
             'text-align:center;margin-bottom:4px;padding:0 2px;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-type{',
             'display:inline-block;background:' + pillBg + ';color:' + pillText + ';',
             'font-size:10px;font-weight:600;line-height:1;',
             'padding:2px 6px;border-radius:8px;margin-bottom:5px;',
+            'pointer-events:none;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-card-stats{',
             'display:flex;align-items:center;justify-content:center;',
             'gap:5px;font-size:11px;font-weight:700;',
             'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;',
+            'pointer-events:none;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-green{color:#00b06f;}',
             '#' + MODAL_ID + ' .nx-rap-card-stats .nx-rap-blue{color:#0a84ff;}',
@@ -473,7 +478,36 @@
             'padding:60px 0;text-align:center;',
             '}',
 
-            '@keyframes nx-rap-spin{to{transform:rotate(360deg);}}'
+            '@keyframes nx-rap-spin{to{transform:rotate(360deg);}}',
+            '@keyframes nx-rap-shimmer{',
+            '0%{background-position:-200% 0;}',
+            '100%{background-position:200% 0;}',
+            '}',
+
+            '#' + MODAL_ID + ' .nx-rap-skel-card{',
+            'border-radius:6px;padding:6px;text-align:center;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-skel-thumb{',
+            'width:100%;aspect-ratio:1/1;border-radius:6px;',
+            'background:linear-gradient(90deg,',
+            skeleton1 + ' 0%,',
+            skeleton2 + ' 50%,',
+            skeleton1 + ' 100%);',
+            'background-size:200% 100%;',
+            'animation:nx-rap-shimmer 1.4s infinite;',
+            'margin-bottom:8px;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-skel-line{',
+            'height:11px;border-radius:5px;margin:0 auto 5px;',
+            'background:linear-gradient(90deg,',
+            skeleton1 + ' 0%,',
+            skeleton2 + ' 50%,',
+            skeleton1 + ' 100%);',
+            'background-size:200% 100%;',
+            'animation:nx-rap-shimmer 1.4s infinite;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-skel-line.l1{width:80%;}',
+            '#' + MODAL_ID + ' .nx-rap-skel-line.l2{width:55%;}'
         ].join('');
         document.head.appendChild(style);
     }
@@ -585,6 +619,41 @@
         return overlay;
     }
 
+    function paintSkeleton(n) {
+        var overlay = document.getElementById(OVERLAY_ID);
+        if (!overlay) return;
+        var body = overlay.querySelector('.nx-rap-body');
+
+        var ul = document.createElement('ul');
+        ul.className = 'hlist item-cards';
+
+        for (var i = 0; i < n; i++) {
+            var li = document.createElement('li');
+            li.className = 'list-item item-card';
+
+            var card = document.createElement('div');
+            card.className = 'nx-rap-skel-card';
+
+            var thumb = document.createElement('div');
+            thumb.className = 'nx-rap-skel-thumb';
+
+            var line1 = document.createElement('div');
+            line1.className = 'nx-rap-skel-line l1';
+
+            var line2 = document.createElement('div');
+            line2.className = 'nx-rap-skel-line l2';
+
+            card.appendChild(thumb);
+            card.appendChild(line1);
+            card.appendChild(line2);
+            li.appendChild(card);
+            ul.appendChild(li);
+        }
+
+        body.innerHTML = '';
+        body.appendChild(ul);
+    }
+
     function paintSpinner() {
         var overlay = document.getElementById(OVERLAY_ID);
         if (!overlay) return;
@@ -646,12 +715,15 @@
             box.appendChild(typeEl);
         }
 
+        var rap = Number(item.recentAveragePrice) || 0;
+        var value = Number(item.originalPrice) || rap;
+
         var stats = document.createElement('div');
         stats.className = 'nx-rap-card-stats';
 
         var rapEl = document.createElement('span');
         rapEl.className = 'nx-rap-green';
-        rapEl.textContent = item.rapDisplay + ' RAP';
+        rapEl.textContent = shortNum(rap) + ' RAP';
 
         var dot = document.createElement('span');
         dot.className = 'nx-rap-dot';
@@ -659,7 +731,7 @@
 
         var valEl = document.createElement('span');
         valEl.className = 'nx-rap-blue';
-        valEl.textContent = item.valueDisplay + ' Value';
+        valEl.textContent = shortNum(value) + ' Value';
 
         stats.appendChild(rapEl);
         stats.appendChild(dot);
@@ -686,20 +758,13 @@
 
         var totalRap = 0;
         var totalValue = 0;
-        var rapUnknown = false;
-        var valueUnknown = false;
-
         for (var k = 0; k < list.length; k++) {
-            totalRap += list[k].rap || 0;
-            totalValue += list[k].value || 0;
-            if (list[k].rapDisplay === '--') rapUnknown = true;
-            if (list[k].valueDisplay === '--') valueUnknown = true;
+            totalRap += Number(list[k].recentAveragePrice) || 0;
+            totalValue += Number(list[k].originalPrice) || 0;
         }
 
         if (subtitle) {
-            subtitle.textContent =
-                (rapUnknown ? '--' : shortNum(totalRap)) + ' RAP \u2022 ' +
-                (valueUnknown ? '--' : shortNum(totalValue)) + ' Value';
+            subtitle.textContent = shortNum(totalRap) + ' RAP \u2022 ' + shortNum(totalValue) + ' Value';
         }
 
         body.innerHTML = '';
