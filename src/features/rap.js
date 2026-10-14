@@ -46,15 +46,15 @@
         return (m >= 100 ? Math.round(m) : m.toFixed(2).replace(/\.?0+$/, '')) + 'M';
     }
 
-    function pickNum(v) {
+    function num(v) {
         if (v === null || v === undefined) return null;
         var n = Number(v);
-        if (!isFinite(n) || n <= 0) return null;
+        if (!isFinite(n)) return null;
         return n;
     }
 
-    function displayNum(v) {
-        return v === null ? '--' : shortNum(v);
+    function valid(v) {
+        return v !== null && v >= 0;
     }
 
     function darkMode() {
@@ -125,27 +125,28 @@
                 var d = details[id] || null;
 
                 var name = d ? d[0] : (item.name || '');
-                var rawRap = d ? pickNum(d[2]) : pickNum(item.recentAveragePrice);
-                var rawValue = d ? pickNum(d[4]) : pickNum(item.originalPrice);
 
-                var itemRap = rawRap === null ? 0 : rawRap;
-                var itemValue = rawValue === null ? itemRap : rawValue;
+                var rapRaw = d ? num(d[2]) : num(item.recentAveragePrice);
+                var valRaw = d ? num(d[3]) : num(item.originalPrice);
+
+                var rapOk = valid(rapRaw);
+                var valOk = valid(valRaw);
 
                 out.push({
                     assetId: id,
                     id: id,
                     name: name,
-                    recentAveragePrice: itemRap,
-                    originalPrice: itemValue,
-                    rapDisplay: displayNum(rawRap),
-                    valueDisplay: displayNum(rawValue),
+                    recentAveragePrice: rapOk ? rapRaw : 0,
+                    originalPrice: valOk ? valRaw : 0,
+                    rapDisplay: rapOk ? shortNum(rapRaw) : '--',
+                    valueDisplay: valOk ? shortNum(valRaw) : '--',
                     serialNumber: item.serialNumber,
                     assetTypeId: item.assetTypeId || item.assetType,
                     thumbnail: item.thumbnail
                 });
 
-                rap += itemRap;
-                value += itemValue;
+                rap += rapOk ? rapRaw : 0;
+                value += valOk ? valRaw : 0;
             }
             return { list: out, rap: rap, value: value };
         });
@@ -277,8 +278,6 @@
             username: whoami,
             exportedAt: new Date().toISOString(),
             totalItems: list.length,
-            totalRap: list.reduce(function (s, r) { return s + (Number(r.rap) || 0); }, 0),
-            totalValue: list.reduce(function (s, r) { return s + (Number(r.value) || 0); }, 0),
             items: list
         };
         saveFile(whoami + '-limiteds.json', JSON.stringify(payload, null, 2), 'application/json;charset=utf-8;');
@@ -287,15 +286,11 @@
     function saveTxt() {
         if (!items.length) return;
         var list = arrange();
-        var totalRap = list.reduce(function (s, i) { return s + (Number(i.recentAveragePrice) || 0); }, 0);
-        var totalValue = list.reduce(function (s, i) { return s + (Number(i.originalPrice) || 0); }, 0);
 
         var lines = [];
         lines.push(whoami + "'s Limiteds");
         lines.push('Exported: ' + new Date().toLocaleString());
         lines.push('Items: ' + list.length);
-        lines.push('Total RAP: ' + totalRap);
-        lines.push('Total Value: ' + totalValue);
         lines.push('');
         lines.push('----------------------------------------');
 
@@ -418,7 +413,7 @@
             '#' + MODAL_ID + ' .nx-rap-close{',
             'background:none;border:0;color:' + faded + ';',
             'cursor:pointer;font-size:22px;line-height:1;padding:0 6px;',
-            'font-weight:400;transition:color 0.12s ease;',
+            'font-weight:400;transition:color 0.12s ease;flex:none;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-close:hover{color:#e5484d;}',
 
@@ -782,20 +777,14 @@
 
         var totalRap = 0;
         var totalValue = 0;
-        var rapUnknown = false;
-        var valueUnknown = false;
 
         for (var k = 0; k < list.length; k++) {
             totalRap += Number(list[k].recentAveragePrice) || 0;
             totalValue += Number(list[k].originalPrice) || 0;
-            if (list[k].rapDisplay === '--') rapUnknown = true;
-            if (list[k].valueDisplay === '--') valueUnknown = true;
         }
 
         if (subtitle) {
-            subtitle.textContent =
-                (rapUnknown ? '--' : shortNum(totalRap)) + ' RAP | ' +
-                (valueUnknown ? '--' : shortNum(totalValue)) + ' Value';
+            subtitle.textContent = shortNum(totalRap) + ' RAP | ' + shortNum(totalValue) + ' Value';
         }
 
         body.innerHTML = '';
