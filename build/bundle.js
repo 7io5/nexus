@@ -194,6 +194,8 @@
     var inflight = {};
     var limitedsCache = {};
 
+    var sortMode = { field: 'rap', dir: 'desc' };
+
     var ASSET_TYPES = {
         1: 'Image', 2: 'T-Shirt', 3: 'Audio', 4: 'Mesh', 5: 'Lua',
         8: 'Hat', 9: 'Place', 10: 'Model', 11: 'Shirt', 12: 'Pants',
@@ -389,9 +391,42 @@
     }
 
     function arrange() {
-        return items.slice().sort(function (a, b) {
-            return (Number(b.recentAveragePrice) || 0) - (Number(a.recentAveragePrice) || 0);
+        var list = items.slice();
+        var f = sortMode.field;
+        var dir = sortMode.dir === 'asc' ? 1 : -1;
+
+        list.sort(function (a, b) {
+            var av, bv;
+
+            if (f === 'rap') {
+                av = Number(a.recentAveragePrice) || 0;
+                bv = Number(b.recentAveragePrice) || 0;
+                return (av - bv) * dir;
+            }
+            if (f === 'value') {
+                av = Number(a.originalPrice) || 0;
+                bv = Number(b.originalPrice) || 0;
+                return (av - bv) * dir;
+            }
+            if (f === 'serial') {
+                av = serialNum(a);
+                bv = serialNum(b);
+                if (av === null && bv === null) return 0;
+                if (av === null) return 1;
+                if (bv === null) return -1;
+                return (av - bv) * dir;
+            }
+            if (f === 'name') {
+                av = (a.name || '').toLowerCase();
+                bv = (b.name || '').toLowerCase();
+                if (av < bv) return -1 * dir;
+                if (av > bv) return 1 * dir;
+                return 0;
+            }
+            return 0;
         });
+
+        return list;
     }
 
     function asRow(item) {
@@ -553,6 +588,36 @@
             'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;',
             '}',
 
+            '#' + MODAL_ID + ' .nx-rap-sort{position:relative;}',
+
+            '#' + MODAL_ID + ' .nx-rap-sort-btn{',
+            'background:' + btnBg + ';color:' + btnText + ';',
+            'border:1px solid ' + btnEdge + ';border-radius:6px;',
+            'padding:5px 10px;font-size:12px;font-weight:500;',
+            'font-family:inherit;cursor:pointer;outline:none;',
+            'transition:background 0.12s ease;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-sort-btn:hover{background:' + btnHover + ';}',
+
+            '#' + MODAL_ID + ' .nx-rap-sort-menu{',
+            'position:absolute;top:calc(100% + 4px);right:0;',
+            'min-width:130px;background:' + menuBg + ';',
+            'border:1px solid ' + menuEdge + ';border-radius:6px;',
+            'box-shadow:0 8px 24px rgba(0,0,0,0.55);',
+            'padding:4px;display:none;z-index:10;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-sort-menu.open{display:block;}',
+
+            '#' + MODAL_ID + ' .nx-rap-sort-item{',
+            'display:block;width:100%;text-align:left;',
+            'background:none;border:0;color:' + panelText + ';',
+            'padding:7px 10px;font-size:12px;font-weight:500;',
+            'font-family:inherit;cursor:pointer;border-radius:4px;',
+            'transition:background 0.12s ease;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-sort-item:hover{background:' + menuHover + ';}',
+            '#' + MODAL_ID + ' .nx-rap-sort-item.active{color:#0a84ff;}',
+
             '#' + MODAL_ID + ' .nx-rap-export{position:relative;}',
 
             '#' + MODAL_ID + ' .nx-rap-export-btn{',
@@ -585,7 +650,7 @@
             '#' + MODAL_ID + ' .nx-rap-close{',
             'background:none;border:0;color:' + faded + ';',
             'cursor:pointer;font-size:22px;line-height:1;padding:0 6px;',
-            'font-weight:400;transition:color 0.12s ease;flex:none;',
+            'font-weight:400;transition:color 0.12s ease;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-close:hover{color:#e5484d;}',
 
@@ -711,9 +776,19 @@
         document.head.appendChild(style);
     }
 
-    function shutExportMenu() {
-        var menu = document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu');
-        if (menu) menu.classList.remove('open');
+    function shutMenus() {
+        var em = document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu');
+        if (em) em.classList.remove('open');
+        var sm = document.querySelector('#' + MODAL_ID + ' .nx-rap-sort-menu');
+        if (sm) sm.classList.remove('open');
+    }
+
+    function sortLabel() {
+        var label = sortMode.field === 'rap' ? 'RAP'
+            : sortMode.field === 'value' ? 'Value'
+            : sortMode.field === 'serial' ? 'Serial'
+            : 'Name';
+        return 'Sort: ' + label + (sortMode.dir === 'asc' ? ' \u25b4' : ' \u25be');
     }
 
     function buildModal() {
@@ -744,6 +819,55 @@
         titleWrap.appendChild(title);
         titleWrap.appendChild(subtitle);
 
+        var sortWrap = document.createElement('div');
+        sortWrap.className = 'nx-rap-sort';
+
+        var sortBtn = document.createElement('button');
+        sortBtn.className = 'nx-rap-sort-btn';
+        sortBtn.textContent = sortLabel();
+
+        var sortMenu = document.createElement('div');
+        sortMenu.className = 'nx-rap-sort-menu';
+
+        [
+            ['rap', 'RAP'],
+            ['value', 'Value'],
+            ['serial', 'Serial'],
+            ['name', 'Name']
+        ].forEach(function (opt) {
+            var sItem = document.createElement('button');
+            sItem.className = 'nx-rap-sort-item';
+            sItem.dataset.field = opt[0];
+            sItem.textContent = opt[1];
+            if (sortMode.field === opt[0]) sItem.classList.add('active');
+            sItem.onclick = function (e) {
+                e.stopPropagation();
+                if (sortMode.field === opt[0]) {
+                    sortMode.dir = sortMode.dir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    sortMode.field = opt[0];
+                    sortMode.dir = opt[0] === 'name' ? 'asc' : 'desc';
+                }
+                Array.prototype.forEach.call(sortMenu.children, function (c) {
+                    c.classList.toggle('active', c.dataset.field === sortMode.field);
+                });
+                sortBtn.textContent = sortLabel();
+                sortMenu.classList.remove('open');
+                paintGrid();
+            };
+            sortMenu.appendChild(sItem);
+        });
+
+        sortBtn.onclick = function (e) {
+            e.stopPropagation();
+            var em = document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu');
+            if (em) em.classList.remove('open');
+            sortMenu.classList.toggle('open');
+        };
+
+        sortWrap.appendChild(sortBtn);
+        sortWrap.appendChild(sortMenu);
+
         var exportWrap = document.createElement('div');
         exportWrap.className = 'nx-rap-export';
 
@@ -764,7 +888,7 @@
             item.textContent = opt[0];
             item.onclick = function (e) {
                 e.stopPropagation();
-                shutExportMenu();
+                shutMenus();
                 opt[1]();
             };
             exportMenu.appendChild(item);
@@ -772,6 +896,8 @@
 
         exportBtn.onclick = function (e) {
             e.stopPropagation();
+            var sm = document.querySelector('#' + MODAL_ID + ' .nx-rap-sort-menu');
+            if (sm) sm.classList.remove('open');
             exportMenu.classList.toggle('open');
         };
 
@@ -784,6 +910,7 @@
         close.onclick = closeModal;
 
         head.appendChild(titleWrap);
+        head.appendChild(sortWrap);
         head.appendChild(exportWrap);
         head.appendChild(close);
 
@@ -799,15 +926,14 @@
             if (e.target === overlay) closeModal();
         });
 
-        document.addEventListener('click', shutExportMenu);
+        document.addEventListener('click', shutMenus);
 
         document.addEventListener('keydown', function (e) {
             if (e.key !== 'Escape' || !overlay.classList.contains('nx-open')) return;
-            if (document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu.open')) {
-                shutExportMenu();
-            } else {
-                closeModal();
-            }
+            var anyOpen = document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu.open')
+                || document.querySelector('#' + MODAL_ID + ' .nx-rap-sort-menu.open');
+            if (anyOpen) shutMenus();
+            else closeModal();
         });
 
         return overlay;
@@ -1024,7 +1150,7 @@
     }
 
     function closeModal() {
-        shutExportMenu();
+        shutMenus();
         var overlay = document.getElementById(OVERLAY_ID);
         if (overlay) overlay.classList.remove('nx-open');
     }
