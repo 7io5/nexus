@@ -16,7 +16,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      octomons.wtf
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=14.2
+// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=15.6
 // @downloadURL  https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // @updateURL    https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // ==/UserScript==
