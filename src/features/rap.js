@@ -22,6 +22,8 @@
     var inflight = {};
     var limitedsCache = {};
 
+    var sortMode = { field: 'rap', dir: 'desc' };
+
     var ASSET_TYPES = {
         1: 'Image', 2: 'T-Shirt', 3: 'Audio', 4: 'Mesh', 5: 'Lua',
         8: 'Hat', 9: 'Place', 10: 'Model', 11: 'Shirt', 12: 'Pants',
@@ -46,15 +48,15 @@
         return (m >= 100 ? Math.round(m) : m.toFixed(2).replace(/\.?0+$/, '')) + 'M';
     }
 
-    function pickNum(v) {
+    function num(v) {
         if (v === null || v === undefined) return null;
         var n = Number(v);
-        if (!isFinite(n) || n <= 0) return null;
+        if (!isFinite(n)) return null;
         return n;
     }
 
-    function displayNum(v) {
-        return v === null ? '--' : shortNum(v);
+    function valid(v) {
+        return v !== null && v >= 0;
     }
 
     function darkMode() {
@@ -125,27 +127,28 @@
                 var d = details[id] || null;
 
                 var name = d ? d[0] : (item.name || '');
-                var rawRap = d ? pickNum(d[2]) : pickNum(item.recentAveragePrice);
-                var rawValue = d ? pickNum(d[4]) : pickNum(item.originalPrice);
 
-                var itemRap = rawRap === null ? 0 : rawRap;
-                var itemValue = rawValue === null ? itemRap : rawValue;
+                var rapRaw = d ? num(d[2]) : num(item.recentAveragePrice);
+                var valRaw = d ? num(d[3]) : num(item.originalPrice);
+
+                var rapOk = valid(rapRaw);
+                var valOk = valid(valRaw);
 
                 out.push({
                     assetId: id,
                     id: id,
                     name: name,
-                    recentAveragePrice: itemRap,
-                    originalPrice: itemValue,
-                    rapDisplay: displayNum(rawRap),
-                    valueDisplay: displayNum(rawValue),
+                    recentAveragePrice: rapOk ? rapRaw : 0,
+                    originalPrice: valOk ? valRaw : 0,
+                    rapDisplay: rapOk ? shortNum(rapRaw) : '--',
+                    valueDisplay: valOk ? shortNum(valRaw) : '--',
                     serialNumber: item.serialNumber,
                     assetTypeId: item.assetTypeId || item.assetType,
                     thumbnail: item.thumbnail
                 });
 
-                rap += itemRap;
-                value += itemValue;
+                rap += rapOk ? rapRaw : 0;
+                value += valOk ? valRaw : 0;
             }
             return { list: out, rap: rap, value: value };
         });
@@ -216,9 +219,42 @@
     }
 
     function arrange() {
-        return items.slice().sort(function (a, b) {
-            return (Number(b.recentAveragePrice) || 0) - (Number(a.recentAveragePrice) || 0);
+        var list = items.slice();
+        var f = sortMode.field;
+        var dir = sortMode.dir === 'asc' ? 1 : -1;
+
+        list.sort(function (a, b) {
+            var av, bv;
+
+            if (f === 'rap') {
+                av = Number(a.recentAveragePrice) || 0;
+                bv = Number(b.recentAveragePrice) || 0;
+                return (av - bv) * dir;
+            }
+            if (f === 'value') {
+                av = Number(a.originalPrice) || 0;
+                bv = Number(b.originalPrice) || 0;
+                return (av - bv) * dir;
+            }
+            if (f === 'serial') {
+                av = serialNum(a);
+                bv = serialNum(b);
+                if (av === null && bv === null) return 0;
+                if (av === null) return 1;
+                if (bv === null) return -1;
+                return (av - bv) * dir;
+            }
+            if (f === 'name') {
+                av = (a.name || '').toLowerCase();
+                bv = (b.name || '').toLowerCase();
+                if (av < bv) return -1 * dir;
+                if (av > bv) return 1 * dir;
+                return 0;
+            }
+            return 0;
         });
+
+        return list;
     }
 
     function asRow(item) {
@@ -277,8 +313,6 @@
             username: whoami,
             exportedAt: new Date().toISOString(),
             totalItems: list.length,
-            totalRap: list.reduce(function (s, r) { return s + (Number(r.rap) || 0); }, 0),
-            totalValue: list.reduce(function (s, r) { return s + (Number(r.value) || 0); }, 0),
             items: list
         };
         saveFile(whoami + '-limiteds.json', JSON.stringify(payload, null, 2), 'application/json;charset=utf-8;');
@@ -287,15 +321,11 @@
     function saveTxt() {
         if (!items.length) return;
         var list = arrange();
-        var totalRap = list.reduce(function (s, i) { return s + (Number(i.recentAveragePrice) || 0); }, 0);
-        var totalValue = list.reduce(function (s, i) { return s + (Number(i.originalPrice) || 0); }, 0);
 
         var lines = [];
         lines.push(whoami + "'s Limiteds");
         lines.push('Exported: ' + new Date().toLocaleString());
         lines.push('Items: ' + list.length);
-        lines.push('Total RAP: ' + totalRap);
-        lines.push('Total Value: ' + totalValue);
         lines.push('');
         lines.push('----------------------------------------');
 
@@ -385,6 +415,36 @@
             'font-size:12px;font-weight:500;color:' + faded + ';',
             'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;',
             '}',
+
+            '#' + MODAL_ID + ' .nx-rap-sort{position:relative;}',
+
+            '#' + MODAL_ID + ' .nx-rap-sort-btn{',
+            'background:' + btnBg + ';color:' + btnText + ';',
+            'border:1px solid ' + btnEdge + ';border-radius:6px;',
+            'padding:5px 10px;font-size:12px;font-weight:500;',
+            'font-family:inherit;cursor:pointer;outline:none;',
+            'transition:background 0.12s ease;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-sort-btn:hover{background:' + btnHover + ';}',
+
+            '#' + MODAL_ID + ' .nx-rap-sort-menu{',
+            'position:absolute;top:calc(100% + 4px);right:0;',
+            'min-width:130px;background:' + menuBg + ';',
+            'border:1px solid ' + menuEdge + ';border-radius:6px;',
+            'box-shadow:0 8px 24px rgba(0,0,0,0.55);',
+            'padding:4px;display:none;z-index:10;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-sort-menu.open{display:block;}',
+
+            '#' + MODAL_ID + ' .nx-rap-sort-item{',
+            'display:block;width:100%;text-align:left;',
+            'background:none;border:0;color:' + panelText + ';',
+            'padding:7px 10px;font-size:12px;font-weight:500;',
+            'font-family:inherit;cursor:pointer;border-radius:4px;',
+            'transition:background 0.12s ease;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-sort-item:hover{background:' + menuHover + ';}',
+            '#' + MODAL_ID + ' .nx-rap-sort-item.active{color:#0a84ff;}',
 
             '#' + MODAL_ID + ' .nx-rap-export{position:relative;}',
 
@@ -544,9 +604,19 @@
         document.head.appendChild(style);
     }
 
-    function shutExportMenu() {
-        var menu = document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu');
-        if (menu) menu.classList.remove('open');
+    function shutMenus() {
+        var em = document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu');
+        if (em) em.classList.remove('open');
+        var sm = document.querySelector('#' + MODAL_ID + ' .nx-rap-sort-menu');
+        if (sm) sm.classList.remove('open');
+    }
+
+    function sortLabel() {
+        var label = sortMode.field === 'rap' ? 'RAP'
+            : sortMode.field === 'value' ? 'Value'
+            : sortMode.field === 'serial' ? 'Serial'
+            : 'Name';
+        return 'Sort: ' + label + (sortMode.dir === 'asc' ? ' \u25b4' : ' \u25be');
     }
 
     function buildModal() {
@@ -577,6 +647,55 @@
         titleWrap.appendChild(title);
         titleWrap.appendChild(subtitle);
 
+        var sortWrap = document.createElement('div');
+        sortWrap.className = 'nx-rap-sort';
+
+        var sortBtn = document.createElement('button');
+        sortBtn.className = 'nx-rap-sort-btn';
+        sortBtn.textContent = sortLabel();
+
+        var sortMenu = document.createElement('div');
+        sortMenu.className = 'nx-rap-sort-menu';
+
+        [
+            ['rap', 'RAP'],
+            ['value', 'Value'],
+            ['serial', 'Serial'],
+            ['name', 'Name']
+        ].forEach(function (opt) {
+            var sItem = document.createElement('button');
+            sItem.className = 'nx-rap-sort-item';
+            sItem.dataset.field = opt[0];
+            sItem.textContent = opt[1];
+            if (sortMode.field === opt[0]) sItem.classList.add('active');
+            sItem.onclick = function (e) {
+                e.stopPropagation();
+                if (sortMode.field === opt[0]) {
+                    sortMode.dir = sortMode.dir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    sortMode.field = opt[0];
+                    sortMode.dir = opt[0] === 'name' ? 'asc' : 'desc';
+                }
+                Array.prototype.forEach.call(sortMenu.children, function (c) {
+                    c.classList.toggle('active', c.dataset.field === sortMode.field);
+                });
+                sortBtn.textContent = sortLabel();
+                sortMenu.classList.remove('open');
+                paintGrid();
+            };
+            sortMenu.appendChild(sItem);
+        });
+
+        sortBtn.onclick = function (e) {
+            e.stopPropagation();
+            var em = document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu');
+            if (em) em.classList.remove('open');
+            sortMenu.classList.toggle('open');
+        };
+
+        sortWrap.appendChild(sortBtn);
+        sortWrap.appendChild(sortMenu);
+
         var exportWrap = document.createElement('div');
         exportWrap.className = 'nx-rap-export';
 
@@ -597,7 +716,7 @@
             item.textContent = opt[0];
             item.onclick = function (e) {
                 e.stopPropagation();
-                shutExportMenu();
+                shutMenus();
                 opt[1]();
             };
             exportMenu.appendChild(item);
@@ -605,6 +724,8 @@
 
         exportBtn.onclick = function (e) {
             e.stopPropagation();
+            var sm = document.querySelector('#' + MODAL_ID + ' .nx-rap-sort-menu');
+            if (sm) sm.classList.remove('open');
             exportMenu.classList.toggle('open');
         };
 
@@ -617,6 +738,7 @@
         close.onclick = closeModal;
 
         head.appendChild(titleWrap);
+        head.appendChild(sortWrap);
         head.appendChild(exportWrap);
         head.appendChild(close);
 
@@ -632,15 +754,14 @@
             if (e.target === overlay) closeModal();
         });
 
-        document.addEventListener('click', shutExportMenu);
+        document.addEventListener('click', shutMenus);
 
         document.addEventListener('keydown', function (e) {
             if (e.key !== 'Escape' || !overlay.classList.contains('nx-open')) return;
-            if (document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu.open')) {
-                shutExportMenu();
-            } else {
-                closeModal();
-            }
+            var anyOpen = document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu.open')
+                || document.querySelector('#' + MODAL_ID + ' .nx-rap-sort-menu.open');
+            if (anyOpen) shutMenus();
+            else closeModal();
         });
 
         return overlay;
@@ -782,20 +903,14 @@
 
         var totalRap = 0;
         var totalValue = 0;
-        var rapUnknown = false;
-        var valueUnknown = false;
 
         for (var k = 0; k < list.length; k++) {
             totalRap += Number(list[k].recentAveragePrice) || 0;
             totalValue += Number(list[k].originalPrice) || 0;
-            if (list[k].rapDisplay === '--') rapUnknown = true;
-            if (list[k].valueDisplay === '--') valueUnknown = true;
         }
 
         if (subtitle) {
-            subtitle.textContent =
-                (rapUnknown ? '--' : shortNum(totalRap)) + ' RAP | ' +
-                (valueUnknown ? '--' : shortNum(totalValue)) + ' Value';
+            subtitle.textContent = shortNum(totalRap) + ' RAP | ' + shortNum(totalValue) + ' Value';
         }
 
         body.innerHTML = '';
@@ -863,7 +978,7 @@
     }
 
     function closeModal() {
-        shutExportMenu();
+        shutMenus();
         var overlay = document.getElementById(OVERLAY_ID);
         if (overlay) overlay.classList.remove('nx-open');
     }
