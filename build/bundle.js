@@ -4411,6 +4411,7 @@
     var avatarCache = {};
     var gameIconCache = {};
     var gameDetailCache = {};
+    var gamePlaceCache = {};
     var lastQuery = '';
     var lastInjected = [];
     var lastPath = location.pathname;
@@ -4554,6 +4555,19 @@
                 return map;
             })
             .catch(function () { return {}; });
+    }
+
+    function fetchPlaceForUniverse(universeId) {
+        var key = 'p' + universeId;
+        if (gamePlaceCache[key]) return Promise.resolve(gamePlaceCache[key]);
+        return fetchJson('/apisite/games/v1/games?universeIds=' + universeId)
+            .then(function (d) {
+                var g = d && d.data && d.data[0];
+                var placeId = g && g.rootPlaceId;
+                if (placeId) gamePlaceCache[key] = placeId;
+                return placeId || null;
+            })
+            .catch(function () { return null; });
     }
 
     function exactMatch(name, query) {
@@ -4776,9 +4790,10 @@
                 var u = users[0];
                 var display = u.DisplayName || u.Name;
                 var username = u.Name && u.DisplayName && u.Name !== u.DisplayName ? '@' + u.Name : '';
-                tasks.push(fetchUserAvatar(u.UserId).then(function (thumb) {
+                var userId = u.UserId || u.Id || u.id;
+                tasks.push(fetchUserAvatar(userId).then(function (thumb) {
                     return {
-                        href: '/search/users?keyword=' + encodeURIComponent(u.Name || u.DisplayName),
+                        href: '/users/' + userId + '/profile',
                         text: display,
                         secondary: username,
                         iconUrl: thumb
@@ -4788,13 +4803,19 @@
 
             games.forEach(function (g) {
                 tasks.push(fetchGameIcon(g.universeId).then(function (icon) {
-                    return {
-                        href: '/games/' + g.rootPlaceId + '/--',
-                        text: g.name,
-                        secondary: '',
-                        iconUrl: icon || GAME_ICON,
-                        playPlaceId: g.rootPlaceId
+                    var buildEntry = function (placeId) {
+                        return {
+                            href: '/games/' + placeId + '/--',
+                            text: g.name,
+                            secondary: '',
+                            iconUrl: icon || GAME_ICON,
+                            playPlaceId: placeId
+                        };
                     };
+                    if (g.rootPlaceId) return buildEntry(g.rootPlaceId);
+                    return fetchPlaceForUniverse(g.universeId).then(function (placeId) {
+                        return buildEntry(placeId || g.universeId);
+                    });
                 }));
             });
 
