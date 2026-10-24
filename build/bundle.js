@@ -198,6 +198,11 @@
 
     var sortMode = { field: 'rap', dir: 'desc' };
 
+    var currentUserIdGlobal = null;
+    var currentUsernameGlobal = null;
+    var currentCursor = null;
+    var isFetchingMore = false;
+
     var ASSET_TYPES = {
         1: 'Image', 2: 'T-Shirt', 3: 'Audio', 4: 'Mesh', 5: 'Lua',
         8: 'Hat', 9: 'Place', 10: 'Model', 11: 'Shirt', 12: 'Pants',
@@ -258,26 +263,31 @@
         return q.get('username') || q.get('viewerName') || '';
     }
 
+    function gmRequest(opts) {
+        return new Promise(function (resolve, reject) {
+            GM_xmlhttpRequest({
+                method: opts.method || 'GET',
+                url: opts.url,
+                headers: opts.headers || {},
+                onload: function (r) { resolve(r); },
+                onerror: function (e) { reject(e); }
+            });
+        });
+    }
+
     function loadDetails() {
         if (detailsCache) return Promise.resolve(detailsCache);
-        return new Promise(function (resolve) {
-            GM_xmlhttpRequest({
-                method: 'GET',
-                url: DETAILS_URL,
-                onload: function (r) {
-                    try {
-                        var d = JSON.parse(r.responseText);
-                        detailsCache = (d && d.success && d.assets) ? d.assets : {};
-                    } catch (e) {
-                        detailsCache = {};
-                    }
-                    resolve(detailsCache);
-                },
-                onerror: function () {
-                    detailsCache = {};
-                    resolve({});
-                }
-            });
+        return gmRequest({ method: 'GET', url: DETAILS_URL }).then(function (r) {
+            try {
+                var d = JSON.parse(r.responseText);
+                detailsCache = (d && d.success && d.assets) ? d.assets : {};
+            } catch (e) {
+                detailsCache = {};
+            }
+            return detailsCache;
+        }, function () {
+            detailsCache = {};
+            return {};
         });
     }
 
@@ -399,6 +409,7 @@
     }
 
     function fetchLimitedsRaw(userId) {
+        currentCursor = null;
         return Promise.all([
             fetch('https://inventory.octane.wtf/v1/users/' + userId + '/assets/collectibles?sortOrder=Desc&limit=100', {
                 credentials: 'include'
@@ -406,6 +417,9 @@
                 if (r.status === 429) throw new Error('429');
                 return r.ok ? r.json() : null;
             }).then(function (d) {
+                if (d && d.nextPageCursor) {
+                    currentCursor = d.nextPageCursor;
+                }
                 return (d && d.data) ? d.data : [];
             }).catch(function () { return []; }),
             loadDetails()
@@ -925,7 +939,16 @@
             'animation:nx-rap-shimmer 1.4s infinite;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-skel-line.l1{width:80%;}',
-            '#' + MODAL_ID + ' .nx-rap-skel-line.l2{width:55%;}'
+            '#' + MODAL_ID + ' .nx-rap-skel-line.l2{width:55%;}',
+
+            '#' + MODAL_ID + ' .nx-rap-see-more{',
+            'display:block;width:100%;padding:12px;margin-top:16px;',
+            'background:' + btnBg + ';color:' + btnText + ';',
+            'border:1px solid ' + btnEdge + ';border-radius:6px;',
+            'font-weight:600;font-size:14px;text-align:center;cursor:pointer;',
+            'transition:background 0.12s ease;',
+            '}',
+            '#' + MODAL_ID + ' .nx-rap-see-more:hover{background:' + btnHover + ';}'
         ].join('');
         document.head.appendChild(style);
     }
@@ -1022,7 +1045,7 @@
                 
                 sortBtn.textContent = sortLabel();
                 sortMenu.classList.remove('open');
-                paintGrid();
+                paintGrid(true);
             };
             sortMenu.appendChild(sItem);
         });
@@ -1236,7 +1259,7 @@
         return li;
     }
 
-    function paintGrid() {
+    function paintGrid(isSorting) {
         var overlay = document.getElementById(OVERLAY_ID);
         if (!overlay) return;
         var body = overlay.querySelector('.nx-rap-body');
@@ -1262,14 +1285,95 @@
             subtitle.textContent = shortNum(totalRap) + ' RAP | ' + shortNum(totalValue) + ' Value';
         }
 
-        body.innerHTML = '';
+        var existingList = body.querySelector('ul.hlist.item-cards');
+        if (isSorting && existingList) {
+            body.innerHTML = '';
+            existingList = null;
+        }
 
-        var ul = document.createElement('ul');
-        ul.className = 'hlist item-cards';
-        list.forEach(function (item) {
-            ul.appendChild(makeCard(item));
-        });
-        body.appendChild(ul);
+        if (!existingList) {
+            body.innerHTML = '';
+            var ul = document.createElement('ul');
+            ul.className = 'hlist item-cards';
+            list.forEach(function (item) {
+                ul.appendChild(makeCard(item));
+            });
+            body.appendChild(ul);
+        } else {
+            existingList.innerHTML = '';
+            list.forEach(function (item) {
+                existingList.appendChild(makeCard(item));
+            });
+        }
+
+        var existingBtn = body.querySelector('.nx-rap-see-more');
+        if (existingBtn) existingBtn.remove();
+
+        if (currentCursor) {
+            var btn = document.createElement('button');
+            btn.className = 'nx-rap-see-more';
+            btn.textContent = isFetchingMore ? 'Loading...' : 'See More';
+            btn.disabled = isFetchingMore;
+            
+            btn.onclick = function() {
+                if (isFetchingMore) return;
+                isFetchingMore = true;
+                btn.textContent = 'Loading...';
+                
+                var url = 'https://inventory.octane.wtf/v1/users/' + currentUserIdGlobal + '/assets/collectibles?sortOrder=Desc&limit=100&cursor=' + currentCursor;
+                
+                fetch(url, { credentials: 'include' })
+                    .then(function(r) { return r.ok ? r.json() : null; })
+                    .then(function(d) {
+                        if (d && d.nextPageCursor) {
+                            currentCursor = d.nextPageCursor;
+                        } else {
+                            currentCursor = null;
+                        }
+                        
+                        var newItems = (d && d.data) ? d.data : [];
+                        var newIds = newItems.map(function(it) { return String(it.assetId || it.id || ''); }).filter(Boolean);
+                        
+                        return loadThumbs(newIds).then(function(m) {
+                            Object.assign(thumbs, m);
+                            
+                            loadDetails().then(function(details) {
+                                newItems.forEach(function(item) {
+                                    var id = String(item.assetId || item.id || '');
+                                    var d = details[id] || null;
+                                    var name = d ? d[0] : (item.name || '');
+                                    var rapRaw = d ? num(d[2]) : num(item.recentAveragePrice);
+                                    var valRaw = d ? num(d[3]) : num(item.originalPrice);
+            
+                                    var rapOk = valid(rapRaw);
+                                    var valOk = valid(valRaw);
+            
+                                    items.push({
+                                        assetId: id,
+                                        id: id,
+                                        name: name,
+                                        recentAveragePrice: rapOk ? rapRaw : 0,
+                                        originalPrice: valOk ? valRaw : 0,
+                                        rapDisplay: rapOk ? shortNum(rapRaw) : '--',
+                                        valueDisplay: valOk ? shortNum(valRaw) : '--',
+                                        serialNumber: item.serialNumber,
+                                        assetTypeId: item.assetTypeId || item.assetType || (d ? d[1] : undefined),
+                                        thumbnail: item.thumbnail
+                                    });
+                                });
+                                
+                                isFetchingMore = false;
+                                paintGrid(false);
+                            });
+                        });
+                    })
+                    .catch(function() {
+                        isFetchingMore = false;
+                        paintGrid(false);
+                    });
+            };
+            body.appendChild(btn);
+        }
     }
 
     function openModal(userId, username) {
@@ -1277,6 +1381,9 @@
         var title = overlay.querySelector('.nx-rap-title');
         var subtitle = overlay.querySelector('.nx-rap-subtitle');
         var avatar = overlay.querySelector('.nx-rap-avatar');
+
+        currentUserIdGlobal = userId;
+        currentUsernameGlobal = username;
 
         if (avatar) {
             avatar.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
@@ -1314,7 +1421,7 @@
             paintSkeleton(idsCached.length || 12);
             loadThumbs(idsCached).then(function (map) {
                 thumbs = map;
-                paintGrid();
+                paintGrid(true);
             });
             return;
         }
@@ -1348,7 +1455,7 @@
 
             loadThumbs(ids).then(function (map) {
                 thumbs = map;
-                paintGrid();
+                paintGrid(true);
             });
         });
     }
@@ -1506,7 +1613,6 @@
         }
     };
 })();
-
 // boom
 
 /* src/features/inventory-search.js */
