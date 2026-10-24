@@ -400,7 +400,7 @@
 
     function fetchLimitedsRaw(userId) {
         return Promise.all([
-            fetch('/apisite/inventory/v1/users/' + userId + '/assets/collectibles', {
+            fetch('https://inventory.octane.wtf/v1/users/' + userId + '/assets/collectibles?sortOrder=Desc&limit=100', {
                 credentials: 'include'
             }).then(function (r) {
                 if (r.status === 429) throw new Error('429');
