@@ -181,6 +181,8 @@
     var MSG_OPEN = 'nx-rap-open-modal';
     var THUMB_BATCH = 'https://octane.wtf/apisite/thumbnails/v1/assets?assetIds=';
     var DETAILS_URL = 'https://octomons.wtf/api/items/v3/itemdetails';
+    var INVENTORY_V2 = 'https://inventory.octane.wtf/v2/users/';
+    var AVATAR_HEADSHOT = 'https://thumbnails.octane.wtf/v1/users/avatar-headshot?userIds=';
     var STYLE_ID = 'nx-rap-style';
 
     var isTop = window.top === window.self;
@@ -208,6 +210,10 @@
         47: 'Solid Model', 48: 'Shatterbox', 56: 'Emote Animation',
         61: 'Plugin', 62: 'Font Family'
     };
+
+    var CHECK_ASSET_TYPE = [
+        'Hat'
+    ];
 
     function shortNum(n) {
         n = Number(n) || 0;
@@ -275,20 +281,139 @@
         });
     }
 
+    function fetchV2Page(userId, assetType, cursor) {
+        var url = INVENTORY_V2 + userId + '/inventory?assetTypes=' + encodeURIComponent(assetType);
+        if (cursor) url += '&cursor=' + encodeURIComponent(cursor);
+        return fetch(url, { credentials: 'include' }).then(function (r) {
+            if (r.status === 403) return { private: true };
+            if (!r.ok) return null;
+            return r.json().catch(function () { return null; });
+        }).catch(function () {
+            return null;
+        });
+    }
+
+    function fetchV2AllPages(userId, assetType) {
+        var results = [];
+        var isPrivate = false;
+        
+        function walk(cursor) {
+            return fetchV2Page(userId, assetType, cursor).then(function (d) {
+                if (!d) return null;
+                if (d.private) {
+                    isPrivate = true;
+                    return null;
+                }
+                if (d.errors && d.errors.length) {
+                    var isPerm = d.errors.some(function (e) { return e.code === 11; });
+                    if (isPerm) isPrivate = true;
+                    return null;
+                }
+                if (!d.data || !d.data.length) return results;
+                
+                for (var i = 0; i < d.data.length; i++) {
+                    results.push(d.data[i]);
+                }
+                
+                if (d.nextPageCursor && d.nextPageCursor !== 'null') {
+                    return walk(d.nextPageCursor);
+                }
+                return results;
+            });
+        }
+        
+        return walk(null).then(function (res) {
+            if (isPrivate) return { isPrivate: true };
+            return res || [];
+        });
+    }
+
+    function buildItemsFromIds(ids, details) {
+        var out = [];
+        var rap = 0;
+        var value = 0;
+        for (var i = 0; i < ids.length; i++) {
+            var id = ids[i];
+            var d = details[id] || null;
+            
+            var name = d ? d[0] : '';
+            var rapRaw = d ? num(d[2]) : null;
+            var valRaw = d ? num(d[3]) : null;
+
+            var rapOk = valid(rapRaw);
+            var valOk = valid(valRaw);
+
+            out.push({
+                assetId: id,
+                id: id,
+                name: name,
+                recentAveragePrice: rapOk ? rapRaw : 0,
+                originalPrice: valOk ? valRaw : 0,
+                rapDisplay: rapOk ? shortNum(rapRaw) : '--',
+                valueDisplay: valOk ? shortNum(valRaw) : '--',
+                serialNumber: undefined,
+                assetTypeId: d ? d[1] : undefined
+            });
+
+            rap += rapOk ? rapRaw : 0;
+            value += valOk ? valRaw : 0;
+        }
+        return { list: out, rap: rap, value: value };
+    }
+
+    function deepScan(userId, details) {
+        var seen = {};
+        var ids = [];
+        var chain = Promise.resolve();
+        var isPrivate = false;
+
+        CHECK_ASSET_TYPE.forEach(function (type) {
+            chain = chain.then(function () {
+                return fetchV2AllPages(userId, type).then(function (res) {
+                    if (res && res.isPrivate) {
+                        isPrivate = true;
+                        return;
+                    }
+                    if (!res || !Array.isArray(res)) return;
+                    
+                    for (var i = 0; i < res.length; i++) {
+                        var it = res[i];
+                        var id = String(it.assetId || it.id || '');
+                        if (!id || seen[id]) continue;
+                        
+                        if (details[id]) {
+                            seen[id] = true;
+                            ids.push(id);
+                        }
+                    }
+                });
+            });
+        });
+
+        return chain.then(function () {
+            if (isPrivate) {
+                return { list: [], rap: 0, value: 0, isPrivate: true };
+            }
+            return buildItemsFromIds(ids, details);
+        });
+    }
+
     function fetchLimitedsRaw(userId) {
         return Promise.all([
-            fetch('/apisite/inventory/v1/users/' + userId + '/assets/collectibles',
-                  { credentials: 'include' })
-                .then(function (r) {
-                    if (r.status === 429) throw new Error('429');
-                    return r.ok ? r.json() : null;
-                })
-                .then(function (d) { return (d && d.data) ? d.data : []; })
-                .catch(function () { return []; }),
+            fetch('/apisite/inventory/v1/users/' + userId + '/assets/collectibles', {
+                credentials: 'include'
+            }).then(function (r) {
+                if (r.status === 429) throw new Error('429');
+                return r.ok ? r.json() : null;
+            }).then(function (d) {
+                return (d && d.data) ? d.data : [];
+            }).catch(function () { return []; }),
             loadDetails()
         ]).then(function (results) {
             var list = results[0];
             var details = results[1];
+
+            var ids = [];
             var out = [];
             var rap = 0;
             var value = 0;
@@ -296,10 +421,11 @@
             for (var i = 0; i < list.length; i++) {
                 var item = list[i];
                 var id = String(item.assetId || item.id || '');
+                if (!id) continue;
+                ids.push(id);
+                
                 var d = details[id] || null;
-
                 var name = d ? d[0] : (item.name || '');
-
                 var rapRaw = d ? num(d[2]) : num(item.recentAveragePrice);
                 var valRaw = d ? num(d[3]) : num(item.originalPrice);
 
@@ -315,14 +441,17 @@
                     rapDisplay: rapOk ? shortNum(rapRaw) : '--',
                     valueDisplay: valOk ? shortNum(valRaw) : '--',
                     serialNumber: item.serialNumber,
-                    assetTypeId: item.assetTypeId || item.assetType,
+                    assetTypeId: item.assetTypeId || item.assetType || (d ? d[1] : undefined),
                     thumbnail: item.thumbnail
                 });
 
                 rap += rapOk ? rapRaw : 0;
                 value += valOk ? valRaw : 0;
             }
-            return { list: out, rap: rap, value: value };
+            
+            if (out.length > 0) return { list: out, rap: rap, value: value };
+
+            return deepScan(userId, details);
         });
     }
 
@@ -531,8 +660,8 @@
         var skeleton2 = dark ? '#2c2c2c' : '#f8f8f8';
         var pillBg = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
         var pillText = dark ? '#bdbebe' : '#606162';
-        var serialBg = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)';
-        var serialText = dark ? '#e0e0e0' : '#3d3d3d';
+        var serialBg = dark ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.6)';
+        var serialText = '#ffffff';
         var btnBg = dark ? '#1c1c1c' : '#f2f2f2';
         var btnEdge = dark ? '#2c2c2c' : '#e4e4e4';
         var btnText = dark ? '#d0d0d0' : '#3d3d3d';
@@ -569,13 +698,21 @@
             '#' + OVERLAY_ID + '.nx-open #' + MODAL_ID + '{transform:scale(1);}',
 
             '#' + MODAL_ID + ' .nx-rap-head{',
-            'display:flex;align-items:flex-start;justify-content:space-between;',
+            'display:flex;align-items:center;justify-content:space-between;',
             'padding:14px 18px;border-bottom:1px solid ' + headEdge + ';',
             'flex:none;gap:10px;background:' + (dark ? '#141414' : '#fafafa') + ';',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-titlewrap{',
-            'flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;',
+            'flex:1;min-width:0;display:flex;align-items:center;gap:10px;',
+            '}',
+
+            '#' + MODAL_ID + ' .nx-rap-avatar{',
+            'width:32px;height:32px;border-radius:50%;background:' + thumbBg + ';object-fit:cover;flex:none;',
+            '}',
+
+            '#' + MODAL_ID + ' .nx-rap-textwrap{',
+            'display:flex;flex-direction:column;gap:3px;overflow:hidden;',
             '}',
 
             '#' + MODAL_ID + ' .nx-rap-title{',
@@ -591,17 +728,18 @@
             '#' + MODAL_ID + ' .nx-rap-sort{position:relative;}',
 
             '#' + MODAL_ID + ' .nx-rap-sort-btn{',
+            'display:inline-flex;align-items:center;justify-content:center;',
             'background:' + btnBg + ';color:' + btnText + ';',
             'border:1px solid ' + btnEdge + ';border-radius:6px;',
-            'padding:5px 10px;font-size:12px;font-weight:500;',
-            'font-family:inherit;cursor:pointer;outline:none;',
+            'padding:5px 10px;font-size:12px;font-weight:500;height:28px;',
+            'font-family:inherit;cursor:pointer;outline:none;box-sizing:border-box;',
             'transition:background 0.12s ease;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-sort-btn:hover{background:' + btnHover + ';}',
 
             '#' + MODAL_ID + ' .nx-rap-sort-menu{',
             'position:absolute;top:calc(100% + 4px);right:0;',
-            'min-width:130px;background:' + menuBg + ';',
+            'min-width:150px;background:' + menuBg + ';',
             'border:1px solid ' + menuEdge + ';border-radius:6px;',
             'box-shadow:0 8px 24px rgba(0,0,0,0.55);',
             'padding:4px;display:none;z-index:10;',
@@ -621,10 +759,11 @@
             '#' + MODAL_ID + ' .nx-rap-export{position:relative;}',
 
             '#' + MODAL_ID + ' .nx-rap-export-btn{',
+            'display:inline-flex;align-items:center;justify-content:center;',
             'background:' + btnBg + ';color:' + btnText + ';',
             'border:1px solid ' + btnEdge + ';border-radius:6px;',
-            'padding:5px 10px;font-size:12px;font-weight:500;',
-            'font-family:inherit;cursor:pointer;outline:none;',
+            'padding:5px 10px;font-size:12px;font-weight:500;height:28px;',
+            'font-family:inherit;cursor:pointer;outline:none;box-sizing:border-box;',
             'transition:background 0.12s ease;',
             '}',
             '#' + MODAL_ID + ' .nx-rap-export-btn:hover{background:' + btnHover + ';}',
@@ -648,11 +787,12 @@
             '#' + MODAL_ID + ' .nx-rap-export-item:hover{background:' + menuHover + ';}',
 
             '#' + MODAL_ID + ' .nx-rap-close{',
+            'display:inline-flex;align-items:center;justify-content:center;',
             'background:none;border:0;color:' + faded + ';',
-            'cursor:pointer;font-size:22px;line-height:1;padding:0 6px;',
+            'cursor:pointer;font-size:22px;line-height:1;padding:0 6px;height:28px;',
             'font-weight:400;transition:color 0.12s ease;',
             '}',
-            '#' + MODAL_ID + ' .nx-rap-close:hover{color:#e5484d;}',
+            '#' + MODAL_ID + ' .nx-rap-close:hover{color:' + heading + ';}',
 
             '#' + MODAL_ID + ' .nx-rap-body{',
             'padding:16px 18px 20px;overflow-y:auto;flex:1;',
@@ -695,9 +835,23 @@
 
             '#' + MODAL_ID + ' .nx-rap-serial{',
             'position:absolute;top:5px;left:5px;',
+            'display:inline-flex;align-items:center;gap:4px;',
             'font-size:10px;font-weight:700;line-height:1;',
-            'padding:3px 7px;border-radius:10px;',
+            'padding:4px 8px;border-radius:10px;',
             'background:' + serialBg + ';color:' + serialText + ';',
+            '}',
+
+            '#' + MODAL_ID + ' .icon-shop-limited{',
+            'display:inline-block;width:14px;height:14px;',
+            'background-color:currentColor;',
+            '-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M12 2c.6 4.8 4.8 9 9.6 9.6-4.8.6-9 4.8-9.6 9.6-.6-4.8-4.8-9-9.6-9.6C7.2 11 11.4 6.8 12 2z\'/%3E%3C/svg%3E");',
+            '-webkit-mask-size:contain;',
+            '-webkit-mask-repeat:no-repeat;',
+            '-webkit-mask-position:center;',
+            'mask-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'M12 2c.6 4.8 4.8 9 9.6 9.6-4.8.6-9 4.8-9.6 9.6-.6-4.8-4.8-9-9.6-9.6C7.2 11 11.4 6.8 12 2z\'/%3E%3C/svg%3E");',
+            'mask-size:contain;',
+            'mask-repeat:no-repeat;',
+            'mask-position:center;',
             '}',
 
             '#' + MODAL_ID + ' .item-card-name{',
@@ -788,7 +942,9 @@
             : sortMode.field === 'value' ? 'Value'
             : sortMode.field === 'serial' ? 'Serial'
             : 'Name';
-        return 'Sort: ' + label + (sortMode.dir === 'asc' ? ' \u25b4' : ' \u25be');
+        var dirLabel = sortMode.field === 'name' ? (sortMode.dir === 'asc' ? 'A-Z' : 'Z-A')
+            : (sortMode.dir === 'asc' ? 'Low' : 'High');
+        return 'Sort: ' + label + ' (' + dirLabel + ')';
     }
 
     function buildModal() {
@@ -808,6 +964,13 @@
         var titleWrap = document.createElement('div');
         titleWrap.className = 'nx-rap-titlewrap';
 
+        var avatar = document.createElement('img');
+        avatar.className = 'nx-rap-avatar';
+        avatar.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+
+        var textwrap = document.createElement('div');
+        textwrap.className = 'nx-rap-textwrap';
+
         var title = document.createElement('span');
         title.className = 'nx-rap-title';
         title.textContent = 'Limiteds';
@@ -816,8 +979,10 @@
         subtitle.className = 'nx-rap-subtitle';
         subtitle.textContent = '-- RAP | -- Value';
 
-        titleWrap.appendChild(title);
-        titleWrap.appendChild(subtitle);
+        textwrap.appendChild(title);
+        textwrap.appendChild(subtitle);
+        titleWrap.appendChild(avatar);
+        titleWrap.appendChild(textwrap);
 
         var sortWrap = document.createElement('div');
         sortWrap.className = 'nx-rap-sort';
@@ -830,27 +995,31 @@
         sortMenu.className = 'nx-rap-sort-menu';
 
         [
-            ['rap', 'RAP'],
-            ['value', 'Value'],
-            ['serial', 'Serial'],
-            ['name', 'Name']
+            ['rap', 'desc', 'RAP (High)'],
+            ['rap', 'asc', 'RAP (Low)'],
+            ['value', 'desc', 'Value (High)'],
+            ['value', 'asc', 'Value (Low)'],
+            ['serial', 'desc', 'Serial (High)'],
+            ['serial', 'asc', 'Serial (Low)'],
+            ['name', 'asc', 'Name (A-Z)'],
+            ['name', 'desc', 'Name (Z-A)']
         ].forEach(function (opt) {
             var sItem = document.createElement('button');
             sItem.className = 'nx-rap-sort-item';
             sItem.dataset.field = opt[0];
-            sItem.textContent = opt[1];
-            if (sortMode.field === opt[0]) sItem.classList.add('active');
+            sItem.dataset.dir = opt[1];
+            sItem.textContent = opt[2];
+            if (sortMode.field === opt[0] && sortMode.dir === opt[1]) sItem.classList.add('active');
             sItem.onclick = function (e) {
                 e.stopPropagation();
-                if (sortMode.field === opt[0]) {
-                    sortMode.dir = sortMode.dir === 'asc' ? 'desc' : 'asc';
-                } else {
-                    sortMode.field = opt[0];
-                    sortMode.dir = opt[0] === 'name' ? 'asc' : 'desc';
-                }
+                sortMode.field = opt[0];
+                sortMode.dir = opt[1];
+                
                 Array.prototype.forEach.call(sortMenu.children, function (c) {
-                    c.classList.toggle('active', c.dataset.field === sortMode.field);
+                    var isActive = c.dataset.field === sortMode.field && c.dataset.dir === sortMode.dir;
+                    c.classList.toggle('active', isActive);
                 });
+                
                 sortBtn.textContent = sortLabel();
                 sortMenu.classList.remove('open');
                 paintGrid();
@@ -873,7 +1042,7 @@
 
         var exportBtn = document.createElement('button');
         exportBtn.className = 'nx-rap-export-btn';
-        exportBtn.textContent = 'Export \u25be';
+        exportBtn.textContent = 'Export';
 
         var exportMenu = document.createElement('div');
         exportMenu.className = 'nx-rap-export-menu';
@@ -1005,9 +1174,17 @@
         thumb.className = 'item-card-thumb-container';
 
         var sn = serialNum(item);
+        
         var serialEl = document.createElement('span');
         serialEl.className = 'nx-rap-serial';
-        serialEl.textContent = sn === null ? 'N/A' : '#' + sn;
+        if (sn !== null) {
+            var icon = document.createElement('span');
+            icon.className = 'icon-shop-limited';
+            serialEl.appendChild(icon);
+            serialEl.appendChild(document.createTextNode('#' + sn));
+        } else {
+            serialEl.textContent = 'N/A';
+        }
         serialEl.title = 'Serial Number';
         thumb.appendChild(serialEl);
 
@@ -1099,6 +1276,18 @@
         var overlay = buildModal();
         var title = overlay.querySelector('.nx-rap-title');
         var subtitle = overlay.querySelector('.nx-rap-subtitle');
+        var avatar = overlay.querySelector('.nx-rap-avatar');
+
+        if (avatar) {
+            avatar.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+            fetch(AVATAR_HEADSHOT + userId + '&size=150x150&format=png')
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d && d.data && d.data[0] && d.data[0].imageUrl) {
+                        avatar.src = d.data[0].imageUrl;
+                    }
+                }).catch(function(){});
+        }
 
         whoami = username || 'user';
         title.textContent = whoami + "'s Limiteds (0)";
@@ -1110,6 +1299,13 @@
 
         var cached = limitedsCache[String(userId)];
         if (cached) {
+            if (cached.isPrivate) {
+                title.textContent = whoami + "'s Limiteds (0)";
+                overlay.querySelector('.nx-rap-body').innerHTML =
+                    '<div class="nx-rap-empty">You don\'t have permissions to view the specified user\'s inventory</div>';
+                if (subtitle) subtitle.textContent = '-- RAP | -- Value';
+                return;
+            }
             items = cached.list;
             title.textContent = whoami + "'s Limiteds (" + cached.list.length + ')';
             var idsCached = cached.list.map(function (it) {
@@ -1126,6 +1322,14 @@
         paintSkeleton(12);
 
         loadLimiteds(userId).then(function (data) {
+            if (data.isPrivate) {
+                title.textContent = whoami + "'s Limiteds (0)";
+                overlay.querySelector('.nx-rap-body').innerHTML =
+                    '<div class="nx-rap-empty">You don\'t have permissions to view the specified user\'s inventory</div>';
+                if (subtitle) subtitle.textContent = '-- RAP | -- Value';
+                return;
+            }
+
             items = data.list;
 
             if (!data.list.length) {
@@ -1221,7 +1425,11 @@
 
         loadLimiteds(userId).then(function (data) {
             if (!span) return;
-            span.textContent = shortNum(data.rap);
+            if (data.isPrivate) {
+                span.textContent = '--';
+            } else {
+                span.textContent = shortNum(data.rap);
+            }
             span.setAttribute('title', tip);
         });
 
