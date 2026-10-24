@@ -199,9 +199,7 @@
     var sortMode = { field: 'rap', dir: 'desc' };
 
     var currentUserIdGlobal = null;
-    var currentUsernameGlobal = null;
-    var currentCursor = null;
-    var isFetchingMore = false;
+    var visibleCount = 50;
 
     var ASSET_TYPES = {
         1: 'Image', 2: 'T-Shirt', 3: 'Audio', 4: 'Mesh', 5: 'Lua',
@@ -408,20 +406,39 @@
         });
     }
 
-    function fetchLimitedsRaw(userId) {
-        currentCursor = null;
-        return Promise.all([
-            fetch('https://inventory.octane.wtf/v1/users/' + userId + '/assets/collectibles?sortOrder=Desc&limit=100', {
-                credentials: 'include'
-            }).then(function (r) {
-                if (r.status === 429) throw new Error('429');
-                return r.ok ? r.json() : null;
-            }).then(function (d) {
-                if (d && d.nextPageCursor) {
-                    currentCursor = d.nextPageCursor;
+    function fetchAllCollectibles(userId) {
+        var allItems = [];
+        var nextCursor = null;
+        
+        function walk(cursor) {
+            var url = 'https://inventory.octane.wtf/v1/users/' + userId + '/assets/collectibles?sortOrder=Desc&limit=100';
+            if (cursor) url += '&cursor=' + encodeURIComponent(cursor);
+            
+            return fetch(url, { credentials: 'include' }).then(function(r) {
+                if (!r.ok) return null;
+                return r.json().catch(function() { return null; });
+            }).then(function(d) {
+                if (!d || !d.data) return allItems;
+                
+                for (var i = 0; i < d.data.length; i++) {
+                    allItems.push(d.data[i]);
                 }
-                return (d && d.data) ? d.data : [];
-            }).catch(function () { return []; }),
+                
+                if (d.nextPageCursor && d.nextPageCursor !== 'null') {
+                    return walk(d.nextPageCursor);
+                }
+                return allItems;
+            }).catch(function() {
+                return allItems;
+            });
+        }
+        
+        return walk(null);
+    }
+
+    function fetchLimitedsRaw(userId) {
+        return Promise.all([
+            fetchAllCollectibles(userId),
             loadDetails()
         ]).then(function (results) {
             var list = results[0];
@@ -1285,92 +1302,23 @@
             subtitle.textContent = shortNum(totalRap) + ' RAP | ' + shortNum(totalValue) + ' Value';
         }
 
-        var existingList = body.querySelector('ul.hlist.item-cards');
-        if (isSorting && existingList) {
-            body.innerHTML = '';
-            existingList = null;
-        }
+        var slice = list.slice(0, visibleCount);
 
-        if (!existingList) {
-            body.innerHTML = '';
-            var ul = document.createElement('ul');
-            ul.className = 'hlist item-cards';
-            list.forEach(function (item) {
-                ul.appendChild(makeCard(item));
-            });
-            body.appendChild(ul);
-        } else {
-            existingList.innerHTML = '';
-            list.forEach(function (item) {
-                existingList.appendChild(makeCard(item));
-            });
-        }
+        body.innerHTML = '';
+        var ul = document.createElement('ul');
+        ul.className = 'hlist item-cards';
+        slice.forEach(function (item) {
+            ul.appendChild(makeCard(item));
+        });
+        body.appendChild(ul);
 
-        var existingBtn = body.querySelector('.nx-rap-see-more');
-        if (existingBtn) existingBtn.remove();
-
-        if (currentCursor) {
+        if (list.length > visibleCount) {
             var btn = document.createElement('button');
             btn.className = 'nx-rap-see-more';
-            btn.textContent = isFetchingMore ? 'Loading...' : 'See More';
-            btn.disabled = isFetchingMore;
-            
+            btn.textContent = 'See More';
             btn.onclick = function() {
-                if (isFetchingMore) return;
-                isFetchingMore = true;
-                btn.textContent = 'Loading...';
-                
-                var url = 'https://inventory.octane.wtf/v1/users/' + currentUserIdGlobal + '/assets/collectibles?sortOrder=Desc&limit=100&cursor=' + currentCursor;
-                
-                fetch(url, { credentials: 'include' })
-                    .then(function(r) { return r.ok ? r.json() : null; })
-                    .then(function(d) {
-                        if (d && d.nextPageCursor) {
-                            currentCursor = d.nextPageCursor;
-                        } else {
-                            currentCursor = null;
-                        }
-                        
-                        var newItems = (d && d.data) ? d.data : [];
-                        var newIds = newItems.map(function(it) { return String(it.assetId || it.id || ''); }).filter(Boolean);
-                        
-                        return loadThumbs(newIds).then(function(m) {
-                            Object.assign(thumbs, m);
-                            
-                            loadDetails().then(function(details) {
-                                newItems.forEach(function(item) {
-                                    var id = String(item.assetId || item.id || '');
-                                    var d = details[id] || null;
-                                    var name = d ? d[0] : (item.name || '');
-                                    var rapRaw = d ? num(d[2]) : num(item.recentAveragePrice);
-                                    var valRaw = d ? num(d[3]) : num(item.originalPrice);
-            
-                                    var rapOk = valid(rapRaw);
-                                    var valOk = valid(valRaw);
-            
-                                    items.push({
-                                        assetId: id,
-                                        id: id,
-                                        name: name,
-                                        recentAveragePrice: rapOk ? rapRaw : 0,
-                                        originalPrice: valOk ? valRaw : 0,
-                                        rapDisplay: rapOk ? shortNum(rapRaw) : '--',
-                                        valueDisplay: valOk ? shortNum(valRaw) : '--',
-                                        serialNumber: item.serialNumber,
-                                        assetTypeId: item.assetTypeId || item.assetType || (d ? d[1] : undefined),
-                                        thumbnail: item.thumbnail
-                                    });
-                                });
-                                
-                                isFetchingMore = false;
-                                paintGrid(false);
-                            });
-                        });
-                    })
-                    .catch(function() {
-                        isFetchingMore = false;
-                        paintGrid(false);
-                    });
+                visibleCount += 50;
+                paintGrid(false);
             };
             body.appendChild(btn);
         }
@@ -1383,7 +1331,7 @@
         var avatar = overlay.querySelector('.nx-rap-avatar');
 
         currentUserIdGlobal = userId;
-        currentUsernameGlobal = username;
+        visibleCount = 50;
 
         if (avatar) {
             avatar.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
@@ -1613,7 +1561,6 @@
         }
     };
 })();
-// boom
 
 /* src/features/inventory-search.js */
 (function() {
