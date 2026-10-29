@@ -6,7 +6,7 @@
 
 <p>Extension for <a href="https://www.octane.wtf">Octane</a>.</p>
 
-<p><strong>This project is work in progress and 100% open-source. Any issues found, please report them by clicking <a href="https://github.com/7io5/nexus/issues/new">here</a>!</strong></p>
+<p><strong>This project is work in progress and 100% open-source. Any issues found, please report them by clicking <a href="https://github.com/7io5/nexus/issues/new">here</a>!</strong></p> https://discord.gg/mJBdWafnGV
 
 </div>
 
