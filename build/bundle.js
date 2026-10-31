@@ -357,8 +357,8 @@
                 name: name,
                 recentAveragePrice: rapOk ? rapRaw : 0,
                 originalPrice: valOk ? valRaw : 0,
-                rapDisplay: rapOk ? shortNum(rapRaw) : '--',
-                valueDisplay: valOk ? shortNum(valRaw) : '--',
+                rapDisplay: rapOk ? shortNum(rapRaw) : '—',
+                valueDisplay: valOk ? shortNum(valRaw) : '—',
                 serialNumber: undefined,
                 assetTypeId: d ? d[1] : undefined
             });
@@ -469,8 +469,8 @@
                     name: name,
                     recentAveragePrice: rapOk ? rapRaw : 0,
                     originalPrice: valOk ? valRaw : 0,
-                    rapDisplay: rapOk ? shortNum(rapRaw) : '--',
-                    valueDisplay: valOk ? shortNum(valRaw) : '--',
+                    rapDisplay: rapOk ? shortNum(rapRaw) : '—',
+                    valueDisplay: valOk ? shortNum(valRaw) : '—',
                     serialNumber: item.serialNumber,
                     assetTypeId: item.assetTypeId || item.assetType || (d ? d[1] : undefined),
                     thumbnail: item.thumbnail
@@ -1017,7 +1017,7 @@
 
         var subtitle = document.createElement('span');
         subtitle.className = 'nx-rap-subtitle';
-        subtitle.textContent = '-- RAP | -- Value';
+        subtitle.textContent = '— RAP | — Value';
 
         textwrap.appendChild(title);
         textwrap.appendChild(subtitle);
@@ -1284,7 +1284,7 @@
 
         if (!items.length) {
             body.innerHTML = '<div class="nx-rap-empty">No limiteds found.</div>';
-            if (subtitle) subtitle.textContent = '-- RAP | -- Value';
+            if (subtitle) subtitle.textContent = '— RAP | — Value';
             return;
         }
 
@@ -1346,7 +1346,7 @@
 
         whoami = username || 'user';
         title.textContent = whoami + "'s Limiteds (0)";
-        if (subtitle) subtitle.textContent = '-- RAP | -- Value';
+        if (subtitle) subtitle.textContent = '— RAP | — Value';
         overlay.classList.add('nx-open');
 
         items = [];
@@ -1358,7 +1358,7 @@
                 title.textContent = whoami + "'s Limiteds (0)";
                 overlay.querySelector('.nx-rap-body').innerHTML =
                     '<div class="nx-rap-empty">You don\'t have permissions to view the specified user\'s inventory</div>';
-                if (subtitle) subtitle.textContent = '-- RAP | -- Value';
+                if (subtitle) subtitle.textContent = '— RAP | — Value';
                 return;
             }
             items = cached.list;
@@ -1381,7 +1381,7 @@
                 title.textContent = whoami + "'s Limiteds (0)";
                 overlay.querySelector('.nx-rap-body').innerHTML =
                     '<div class="nx-rap-empty">You don\'t have permissions to view the specified user\'s inventory</div>';
-                if (subtitle) subtitle.textContent = '-- RAP | -- Value';
+                if (subtitle) subtitle.textContent = '— RAP | — Value';
                 return;
             }
 
@@ -1391,7 +1391,7 @@
                 title.textContent = whoami + "'s Limiteds (0)";
                 overlay.querySelector('.nx-rap-body').innerHTML =
                     '<div class="nx-rap-empty">No limiteds found.</div>';
-                if (subtitle) subtitle.textContent = '-- RAP | -- Value';
+                if (subtitle) subtitle.textContent = '— RAP | — Value';
                 return;
             }
 
@@ -1481,7 +1481,7 @@
         loadLimiteds(userId).then(function (data) {
             if (!span) return;
             if (data.isPrivate) {
-                span.textContent = '--';
+                span.textContent = '—';
             } else {
                 span.textContent = shortNum(data.rap);
             }
