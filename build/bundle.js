@@ -5560,15 +5560,24 @@
             var url = window.location.href.toLowerCase();
             var isIframe = window.self !== window.top;
 
-            if (url.indexOf('chat') !== -1 || url.indexOf('develop') !== -1 || url.indexOf('build/upload') !== -1) {
+            // Blocked globally
+            if (
+                url.indexOf('chat') !== -1 || 
+                url.indexOf('develop') !== -1 || 
+                url.indexOf('build/upload') !== -1 ||
+                url.indexOf('/catalog/') !== -1 ||
+                url.indexOf('/library/') !== -1
+            ) {
                 return;
             }
 
+            // Blocked only inside iframes
             if (isIframe && (
                 url.indexOf('friends') !== -1 || 
                 url.indexOf('trades') !== -1 || 
                 url.indexOf('donate') !== -1 || 
-                url.indexOf('inventory') !== -1
+                url.indexOf('inventory') !== -1 ||
+                url.indexOf('avatar') !== -1
             )) {
                 return;
             }
@@ -5606,7 +5615,7 @@
             layer.style.zIndex = '2147483647';
             layer.style.willChange = 'transform';
 
-            pen = layer.getContext('2d', { alpha: true, desynchronized: true });
+            pen = layer.getContext('2d', { alpha: true });
 
             document.body.appendChild(layer);
             fit();
