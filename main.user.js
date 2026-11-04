@@ -313,6 +313,7 @@
         if (s.get('tradeValues') && f.tradeValues) f.tradeValues.apply();
         if (s.get('itemOwners') && f.itemOwners) f.itemOwners.apply();
         if (s.get('quickSearch') && f.quickSearch) f.quickSearch.apply();
+        if (s.get('snow') && f.snow) f.snow.apply();
         if (f.announcement) f.announcement.apply();
     }
 
@@ -332,6 +333,7 @@
             if (s.get('background') && fb) fb.apply();
             if (s.get('userBadge') && ub) ub.apply();
             if (s.get('tradeValues') && tv) tv.apply();
+            if (s.get('snow') && f.snow) f.snow.apply();
             return;
         }
 
@@ -342,6 +344,7 @@
         if (s.get('bulkUnfriend') && f.bulkUnfriend) f.bulkUnfriend.apply();
         if (s.get('tradeValues') && f.tradeValues) f.tradeValues.apply();
         if (s.get('quickSearch') && f.quickSearch) f.quickSearch.apply();
+        if (s.get('snow') && f.snow) f.snow.apply();
     }
 
     var tries = 0;
