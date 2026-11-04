@@ -34,6 +34,7 @@
         quickSearch:     { cat: 'features', label: 'Quick Search',             desc: 'Search users and game results into the search bar at the same time.' },
         bulkUnfriend:    { cat: 'features', label: 'Bulk Unfriend',            desc: 'Select multiple friends and remove them at once.' },
         rap:             { cat: 'features', label: 'RAP on Profile',           desc: 'Shows total RAP next to profile stats.' },
+        snow:            { cat: 'features', label: 'Snowfall',                 desc: 'Makes snow fall across the site. Click a snowflake???.' },
         removeAds:       { cat: 'features', label: 'Remove Ads',               desc: 'Hides all advertisement banners across the site.' }
     };
 
