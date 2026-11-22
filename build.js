@@ -15,7 +15,6 @@ const FILES = [
     'src/features/inventory-search.js',
     'src/features/bulk-unfriend.js',
     'src/features/custom-logo.js',
-    'src/features/oldroblox.js',
     'src/features/hide-chat.js',
     'src/features/custom-font.js',
     'src/features/background.js',
@@ -24,6 +23,7 @@ const FILES = [
     'src/features/itemOwners.js',
     'src/features/quickSearch.js',
     'src/features/snow.js',
+    'src/features/spaloader.js',
     'src/ui/modal.js'
 ];
 
