@@ -5678,7 +5678,7 @@
     ];
 
     var OPTS = {
-        roblox2019:      { cat: 'visual',   label: 'Roblox 2019L Theme',       desc: 'Makes Octane look like Roblox back in 2019.' },
+        snow:            { cat: 'features', label: 'Snowfall',                 desc: 'Makes snow fall across the site. Click a snowflake???.' },
         background:      { cat: 'visual',   label: 'Custom Avatar Background', desc: 'Set custom backgrounds behind your avatar.' },
         hideAlert:       { cat: 'visual',   label: 'Hide Alert',               desc: 'Hides the alert banner under the navigation bar.' },
         hideChat:        { cat: 'visual',   label: 'Hide Chat',                desc: 'Hides chat across the site.' },
@@ -5688,9 +5688,9 @@
         itemOwners:      { cat: 'features', label: 'Item Owners',              desc: 'Adds an Owners tab to item pages showing every owner, serial, and acquire date.' },
         inventorySearch: { cat: 'features', label: 'Inventory Search',         desc: 'Adds a search bar to your inventory.' },
         quickSearch:     { cat: 'features', label: 'Quick Search',             desc: 'Search users and game results into the search bar at the same time.' },
+        spaLoader:       { cat: 'features', label: 'Smooth Navigation',        desc: 'Prevents page reloads when navigating.' },
         bulkUnfriend:    { cat: 'features', label: 'Bulk Unfriend',            desc: 'Select multiple friends and remove them at once.' },
         rap:             { cat: 'features', label: 'RAP on Profile',           desc: 'Shows total RAP next to profile stats.' },
-        snow:            { cat: 'features', label: 'Snowfall',                 desc: 'Makes snow fall across the site. Click a snowflake???.' },
         removeAds:       { cat: 'features', label: 'Remove Ads',               desc: 'Hides all advertisement banners across the site.' }
     };
 
