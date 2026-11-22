@@ -2,7 +2,7 @@
 // @name         Nexus
 // @namespace    https://github.com/zykieboi/nexus
 // @version      1.4.4
-// @icon         https://github.com/zykieboi/nexus/blob/main/img/icon.png?raw=true
+// @icon         https://raw.githubusercontent.com/7io5/nexus/main/img/icon.png
 // @author       zykieboi
 // @description  Testing stuff :)
 // @match        https://octane.wtf/*
