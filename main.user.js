@@ -304,7 +304,7 @@
         if (s.get('inventorySearch') && f.inventorySearch) f.inventorySearch.apply();
         if (s.get('bulkUnfriend') && f.bulkUnfriend) f.bulkUnfriend.apply();
         if (s.get('customLogo') && f.customLogo) f.customLogo.apply();
-        if (s.get('roblox2019') && f.roblox2019) f.roblox2019.apply();
+        if (s.get('spaloader') && f.spaloader) f.spaloader.apply();
         if (s.get('hideChat') && f.hideChat) f.hideChat.apply();
         if (s.get('customFont') && f.customFont) f.customFont.apply();
         if (s.get('nexusPanel') && f.nexusPanel) f.nexusPanel.apply();
@@ -334,6 +334,7 @@
             if (s.get('userBadge') && ub) ub.apply();
             if (s.get('tradeValues') && tv) tv.apply();
             if (s.get('snow') && f.snow) f.snow.apply();
+            if (s.get('spaloader') && f.spaloader) f.spaloader.apply();
             return;
         }
 
@@ -345,6 +346,7 @@
         if (s.get('tradeValues') && f.tradeValues) f.tradeValues.apply();
         if (s.get('quickSearch') && f.quickSearch) f.quickSearch.apply();
         if (s.get('snow') && f.snow) f.snow.apply();
+        if (s.get('spaloader') && f.spaloader) f.spaloader.apply();
     }
 
     var tries = 0;
