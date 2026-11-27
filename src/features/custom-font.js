@@ -5,8 +5,7 @@
     window.NX.features = window.NX.features || {};
 
     var STYLE_ID = 'nx-custom-font';
-    var IFRAME_STYLE_ID = 'nx-custom-font-iframe';
-    var STORAGE_KEY = 'nx_custom_font';
+    var STORAGE_KEY = 'nx_customFontId';
 
     var FONTS = [
         { id: 'default',    label: 'Default',          stack: '' },
@@ -120,7 +119,7 @@
 
     function buildCss(stack) {
         return [
-            'html, body, #__next, .gotham-font, .gotham-font * {',
+            'html, body, #__next, .gotham-font, .gotham-font *, #nx-panel, #nx-panel * {',
             '  font-family: ' + stack + ' !important;',
             '}',
             'html code, html pre, html kbd, html samp, html var, html tt,',
@@ -139,15 +138,25 @@
         ].join('\n');
     }
 
-    function injectIntoDocument(doc, stack, id) {
-        if (!doc || !doc.documentElement) return;
-        var old = doc.getElementById(id);
+    function injectIntoRoot(root, stack, id) {
+        if (!root) return;
+        var old = root.getElementById ? root.getElementById(id) : root.querySelector('#' + id);
         if (old) old.remove();
         if (!stack) return;
-        var s = doc.createElement('style');
+        var s = document.createElement('style');
         s.id = id;
         s.textContent = buildCss(stack);
-        (doc.head || doc.documentElement).appendChild(s);
+        if (root.head) root.head.appendChild(s);
+        else root.appendChild(s);
+    }
+
+    function forEachShadowRoot(fn) {
+        var hosts = document.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                fn(hosts[i].shadowRoot);
+            }
+        }
     }
 
     function inject() {
@@ -157,9 +166,13 @@
             return;
         }
         injectGoogleFonts();
-        injectIntoDocument(document, cfg.stack, STYLE_ID);
-        forEachSameOriginIframe(function (doc) {
-            injectIntoDocument(doc, cfg.stack, IFRAME_STYLE_ID);
+        
+        // 1. Inject into main document
+        injectIntoRoot(document, cfg.stack, STYLE_ID);
+
+        // 2. Inject into all shadow roots
+        forEachShadowRoot(function (root) {
+            injectIntoRoot(root, cfg.stack, STYLE_ID);
         });
     }
 
@@ -168,35 +181,10 @@
     function removeAll() {
         var a = document.getElementById(STYLE_ID);
         if (a) a.remove();
-        forEachSameOriginIframe(function (doc) {
-            var b = doc.getElementById(IFRAME_STYLE_ID);
+        forEachShadowRoot(function (root) {
+            var b = root.getElementById ? root.getElementById(STYLE_ID) : root.querySelector('#' + STYLE_ID);
             if (b) b.remove();
         });
-    }
-
-    function forEachSameOriginIframe(fn) {
-        var frames = document.querySelectorAll('iframe');
-        for (var i = 0; i < frames.length; i++) {
-            var d = null;
-            try { d = frames[i].contentDocument; } catch (e) { d = null; }
-            if (d && d.documentElement) fn(d, frames[i]);
-        }
-    }
-
-    function bindIframes() {
-        var frames = document.querySelectorAll('iframe');
-        for (var i = 0; i < frames.length; i++) {
-            var f = frames[i];
-            if (f.__nxFontBound) continue;
-            f.__nxFontBound = true;
-            f.addEventListener('load', function () {
-                var cfg = fontById(getFontId());
-                if (!cfg.stack) return;
-                var d = null;
-                try { d = this.contentDocument; } catch (e) { d = null; }
-                if (d) injectIntoDocument(d, cfg.stack, IFRAME_STYLE_ID);
-            });
-        }
     }
 
     var scheduled = false;
@@ -212,25 +200,11 @@
     function apply() {
         var run = function () {
             inject();
-            bindIframes();
 
             var obs = new MutationObserver(function () {
-                bindIframes();
-                if (!document.getElementById(STYLE_ID) && getFontId() !== 'default') scheduleInject();
+                if (getFontId() !== 'default') scheduleInject();
             });
             obs.observe(document.documentElement, { childList: true, subtree: true });
-
-            forEachSameOriginIframe(function (doc) {
-                try {
-                    var fobs = new MutationObserver(function () {
-                        if (!doc.getElementById(IFRAME_STYLE_ID) && getFontId() !== 'default') {
-                            var cfg = fontById(getFontId());
-                            if (cfg.stack) injectIntoDocument(doc, cfg.stack, IFRAME_STYLE_ID);
-                        }
-                    });
-                    fobs.observe(doc.documentElement, { childList: true });
-                } catch (e) {}
-            });
         };
 
         if (document.readyState === 'loading') {
@@ -249,10 +223,6 @@
         linksInjected = false;
         var l = document.getElementById('nx-custom-font-links');
         if (l) l.remove();
-        var frames = document.querySelectorAll('iframe');
-        for (var i = 0; i < frames.length; i++) {
-            try { delete frames[i].__nxFontBound; } catch (e) {}
-        }
     }
 
     window.NX.features.customFont = {
