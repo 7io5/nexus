@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nexus
 // @namespace    https://github.com/zykieboi/nexus
-// @version      1.5.3
+// @version      1.5.4
 // @icon         https://raw.githubusercontent.com/7io5/nexus/main/img/icon.png
 // @author       zykieboi
 // @description  Testing stuff :)
@@ -16,7 +16,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      octomons.wtf
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.3
+// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.4
 // @downloadURL  https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // @updateURL    https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // ==/UserScript==
@@ -29,13 +29,11 @@
     window.NX.role = null;
 
     var TAB_ID = 'nx-tab';
-    var TAB_CONTENT_HIDE_CLASS = 'nx-hiding';
     var HEADER_FLAG = 'data-nx-swapped';
     var REOPEN_KEY = 'nx_reopen';
 
     var nxOpen = false;
     var reopenConsumed = false;
-    var hiddenSiblings = [];
 
     function deepQuery(selector, root) {
         root = root || document;
@@ -190,26 +188,6 @@
         return panel;
     }
 
-    function hideContent(tabContent) {
-        hiddenSiblings = [];
-        var children = Array.prototype.slice.call(tabContent.children);
-        children.forEach(function (child) {
-            if (child.id === 'nx-panel') return;
-            if (child.style.display === 'none') return;
-            hiddenSiblings.push({ el: child, display: child.style.display });
-            child.style.display = 'none';
-        });
-    }
-
-    function showContent() {
-        hiddenSiblings.forEach(function (item) {
-            if (item.el && item.el.parentNode) {
-                item.el.style.display = item.display;
-            }
-        });
-        hiddenSiblings = [];
-    }
-
     function openNexus() {
         nxOpen = true;
 
@@ -219,7 +197,8 @@
         var panel = ensurePanel();
         if (!panel) return;
 
-        hideContent(tabContent);
+        // Apply the .nx-hiding class (this is what actually hides the old content)
+        tabContent.classList.add('nx-hiding');
         panel.classList.add('nx-active');
 
         ensureTab();
@@ -230,7 +209,8 @@
     function closeNexus() {
         nxOpen = false;
 
-        showContent();
+        var tabContent = deepQuery('#settings-container .tab-content');
+        if (tabContent) tabContent.classList.remove('nx-hiding');
         var panel = deepQuery('#nx-panel');
         if (panel) panel.classList.remove('nx-active');
         clearActive();
@@ -239,11 +219,12 @@
 
     function purgeNexusPanel() {
         nxOpen = false;
-        showContent();
         var panel = deepQuery('#nx-panel');
         if (panel) panel.remove();
         var tab = deepQuery('#' + TAB_ID);
         if (tab) tab.remove();
+        var tabContent = deepQuery('#settings-container .tab-content');
+        if (tabContent) tabContent.classList.remove('nx-hiding');
         restoreHeader();
     }
 
@@ -290,12 +271,12 @@
         if (consumeReopen()) { openNexus(); return; }
 
         if (nxOpen) {
+            var tabContent = deepQuery('#settings-container .tab-content');
             var panel = deepQuery('#' + 'nx-panel');
-            if (!panel) {
-                var tabContent = deepQuery('#settings-container .tab-content');
+            if (!panel || panel.parentNode !== tabContent) {
                 var p = ensurePanel();
                 if (p && tabContent) {
-                    hideContent(tabContent);
+                    tabContent.classList.add('nx-hiding');
                     p.classList.add('nx-active');
                 }
             }
