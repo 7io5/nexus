@@ -2943,17 +2943,28 @@
         sunset:   'linear-gradient(180deg, #ff7e5f, #feb47b)'
     };
 
-    var FOLDER_ICON =
-        '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">' +
-        '<path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/>' +
-        '</svg>';
+    var FOLDER_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>';
 
-    var applied  = null;
-    var built    = false;
-    var uid      = 0;
-    var lastRow  = null;
-    var lastCss  = '';
+    var applied = null;
+    var built = false;
+    var uid = 0;
+    var lastRow = null;
+    var lastCss = '';
     var themeBound = false;
+
+    function deepQuery(selector, root) {
+        root = root || document;
+        var found = root.querySelector(selector);
+        if (found) return found;
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                var r = deepQuery(selector, hosts[i].shadowRoot);
+                if (r) return r;
+            }
+        }
+        return null;
+    }
 
     function dark() {
         try { return localStorage.getItem('rbx_theme_v1') === 'dark'; }
@@ -2980,54 +2991,63 @@
     function cssText() {
         var t = themeVars();
         return [
-            '#nx-bg-row{display:block;width:100%;margin:8px 0 0;clear:both;position:relative;z-index:1}',
-            '#nx-bg-row .nx-label{display:block}',
-            '#nx-bg-row .nx-edit{display:block;text-align:right}',
-            '#nx-bg-row .nx-edit a{cursor:pointer}',
-            '#nx-bg-row .nx-panel{display:none;margin-top:8px}',
+            '#nx-bg-row{display:block;width:100%;margin:8px 0 0;clear:both;position:relative;z-index:1;color:#232527}',
+            '#nx-bg-row.nx-dark{color:#e8e8e8}',
+            '#nx-bg-row .nx-label{display:block;margin-bottom:6px;font-weight:600}',
+            '#nx-bg-row .nx-edit{display:block;text-align:right;margin-bottom:8px}',
+            '#nx-bg-row .nx-edit a{cursor:pointer;color:#0a84ff;text-decoration:none}',
+            '#nx-bg-row .nx-panel{display:none;margin-top:8px;background:rgba(0,0,0,0.02);padding:12px;border-radius:8px}',
+            '#nx-bg-row.nx-dark .nx-panel{background:rgba(255,255,255,0.03)}',
             '#nx-bg-row .nx-panel.open{display:block}',
-            '#nx-bg-row .nx-chips{display:flex;flex-wrap:wrap;gap:4px;align-items:center}',
-            '#nx-bg-row .nx-chip{width:20px;height:20px;border-radius:4px;cursor:pointer;border:1px solid ' + t.chipBorder + ';box-sizing:border-box;display:flex;align-items:center;justify-content:center;color:' + t.chipInk + '}',
+            '#nx-bg-row .nx-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}',
+            '#nx-bg-row .nx-chip{width:24px;height:24px;border-radius:6px;cursor:pointer;border:1px solid ' + t.chipBorder + ';box-sizing:border-box;display:flex;align-items:center;justify-content:center;color:' + t.chipInk + '}',
             '#nx-bg-row .nx-chip:hover{border-color:' + t.chipHover + '}',
-            '#nx-bg-row .nx-chip.active{outline:1px solid ' + t.chipHover + ';outline-offset:1px}',
-            '#nx-bg-row .nx-chip.none{background:' + t.noneBg + ';color:' + t.noneInk + ';font-size:10px;line-height:20px;font-family:inherit}',
+            '#nx-bg-row .nx-chip.active{outline:2px solid #0a84ff;outline-offset:2px}',
+            '#nx-bg-row .nx-chip.none{background:' + t.noneBg + ';color:' + t.noneInk + ';font-size:12px}',
             '#nx-bg-row .nx-chip.picker{background:conic-gradient(from 90deg,#f66,#fc6,#6f6,#6ff,#66f,#f6f,#f66)}',
             '#nx-bg-row .nx-chip.custom{background:' + t.customBg + '}',
-            '#nx-bg-row .nx-subpanel{display:none;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap}',
+            '#nx-bg-row .nx-subpanel{display:none;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}',
             '#nx-bg-row .nx-subpanel.open{display:flex}',
-            '#nx-bg-row .nx-subpanel input[type=text]{flex:1;min-width:0;background:' + t.inputBg + ';border:1px solid ' + t.inputBorder + ';color:' + t.inputInk + ';padding:4px 6px;border-radius:4px;font:inherit;font-size:12px}',
+            '#nx-bg-row .nx-subpanel input[type=text]{flex:1;min-width:0;background:' + t.inputBg + ';border:1px solid ' + t.inputBorder + ';color:' + t.inputInk + ';padding:6px 10px;border-radius:6px;font:inherit;font-size:13px}',
             '#nx-bg-row .nx-subpanel input[type=text]:focus{outline:none;border-color:' + t.inputFocus + '}',
-            '#nx-bg-row .nx-subpanel input[type=color]{width:36px;height:26px;padding:0;border:1px solid ' + t.inputBorder + ';background:' + t.inputBg + ';border-radius:4px;cursor:pointer}',
-            '#nx-bg-row .nx-subpanel .nx-btn{cursor:pointer;background:' + t.btnBg + ';border:1px solid ' + t.inputBorder + ';color:' + t.inputInk + ';padding:4px 10px;border-radius:4px;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:4px}',
+            '#nx-bg-row .nx-subpanel input[type=color]{width:40px;height:32px;padding:0;border:1px solid ' + t.inputBorder + ';background:' + t.inputBg + ';border-radius:6px;cursor:pointer}',
+            '#nx-bg-row .nx-subpanel .nx-btn{cursor:pointer;background:' + t.btnBg + ';border:1px solid ' + t.inputBorder + ';color:' + t.inputInk + ';padding:6px 12px;border-radius:6px;font-size:13px;font-weight:500;text-decoration:none;display:inline-flex;align-items:center;gap:6px}',
             '#nx-bg-row .nx-subpanel .nx-btn:hover{background:' + t.btnHover + '}',
-            '#nx-bg-row .nx-subpanel .nx-or{color:' + t.orInk + ';font-size:11px;padding:0 4px}',
+            '#nx-bg-row .nx-subpanel .nx-or{color:' + t.orInk + ';font-size:12px;padding:0 4px}',
             '#nx-bg-row .nx-subpanel input[type=file]{display:none}'
         ].join('');
     }
 
-    function style() {
+    function style(root) {
+        var target = root || document;
         var text = cssText();
-        if (text === lastCss) return;
+        if (text === lastCss && target.getElementById && target.getElementById(STYLE_ID)) return;
         lastCss = text;
-        var s = document.getElementById(STYLE_ID);
+        var s = target.getElementById ? target.getElementById(STYLE_ID) : target.querySelector('#' + STYLE_ID);
         if (s) { s.textContent = text; return; }
         s = document.createElement('style');
         s.id = STYLE_ID;
         s.textContent = text;
-        document.head.appendChild(s);
+        if (target.head) target.head.appendChild(s);
+        else target.appendChild(s);
     }
 
     function store() {
         try {
-            var raw = GM_getValue(STORE_KEY, '{}');
-            return typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
+            var raw = localStorage.getItem(STORE_KEY);
+            return raw ? JSON.parse(raw) : {};
         } catch (e) { return {}; }
     }
-    function save(s) { GM_setValue(STORE_KEY, JSON.stringify(s)); }
+
+    function save(s) {
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch (e) {}
+    }
+
     function get(u) {
         var s = store();
         return (s.byUser && s.byUser[String(u)]) || null;
     }
+
     function set(u, bg) {
         var s = store();
         if (!s.byUser) s.byUser = {};
@@ -3035,11 +3055,13 @@
         else delete s.byUser[String(u)];
         save(s);
     }
+
     function isCustom(bg) { return !!bg && bg.indexOf('url(') === 0; }
     function isSolid(bg) {
         if (!bg || bg.indexOf('url(') === 0 || bg.indexOf('gradient(') !== -1) return false;
         return bg.charAt(0) === '#' || bg.indexOf('rgb') === 0 || bg.indexOf('hsl') === 0;
     }
+
     function readUid() {
         var p = new URLSearchParams(location.search);
         return parseInt(p.get('userId'), 10) || 0;
@@ -3047,7 +3069,7 @@
 
     function applyBg(bg) {
         if (applied === bg) return;
-        var t = document.querySelector('.avatar-back');
+        var t = deepQuery('.avatar-back') || deepQuery('.avatar-container') || deepQuery('.profile-avatar');
         if (!t) return;
         var clear = ['background', 'background-image', 'background-color',
                      'background-size', 'background-position', 'background-repeat'];
@@ -3084,22 +3106,20 @@
         if (built && lastRow && lastRow.isConnected) return;
         built = false;
 
-        var redraw = document.querySelector('.redraw-avatar');
-        if (!redraw) return;
+        // The new site puts the profile content inside a shadow root, but doesn't use .redraw-avatar.
+        // We hook into the user avatar container or the tab content.
+        var anchor = deepQuery('.user-avatar-container') || deepQuery('.profile-avatar') || deepQuery('.avatar-back');
+        if (!anchor) return;
+        
         if (!uid) uid = readUid();
         if (!uid) return;
 
-        var old = document.getElementById(ROW_ID);
+        var old = deepQuery('#' + ROW_ID);
         if (old) old.remove();
 
-        var cs = getComputedStyle(redraw);
         var row = document.createElement('div');
         row.id = ROW_ID;
-        row.style.color      = cs.color;
-        row.style.fontSize   = cs.fontSize;
-        row.style.fontWeight = cs.fontWeight;
-        row.style.fontFamily = cs.fontFamily;
-        row.style.lineHeight = cs.lineHeight;
+        if (dark()) row.classList.add('nx-dark');
 
         var label = document.createElement('div');
         label.className = 'nx-label';
@@ -3268,7 +3288,7 @@
             if (!open) closeSubpanels();
         });
 
-        redraw.parentNode.insertBefore(row, redraw.nextSibling);
+        anchor.parentNode.insertBefore(row, anchor.nextSibling);
         lastRow = row;
         built = true;
         var state = { chips: chips, pickerChip: pickerChip, customChip: customChip };
@@ -3283,10 +3303,12 @@
     }
 
     function onThemeChange() {
-        style();
         applied = null;
+        var row = deepQuery('#' + ROW_ID);
+        if (row) row.classList.toggle('nx-dark', dark());
         tick();
     }
+
     function onStorage(e) { if (e.key === 'rbx_theme_v1') onThemeChange(); }
 
     function bindTheme() {
@@ -3295,6 +3317,7 @@
         window.addEventListener('storage', onStorage);
         window.addEventListener('octane-theme-change', onThemeChange);
     }
+
     function unbindTheme() {
         if (!themeBound) return;
         themeBound = false;
@@ -3311,7 +3334,7 @@
         refresh: tick,
         teardown: function () {
             unbindTheme();
-            var row = document.getElementById(ROW_ID);
+            var row = deepQuery('#' + ROW_ID);
             if (row) row.remove();
             var s = document.getElementById(STYLE_ID);
             if (s) s.remove();
