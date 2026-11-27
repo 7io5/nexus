@@ -23,7 +23,6 @@ const FILES = [
     'src/features/itemOwners.js',
     'src/features/quickSearch.js',
     'src/features/snow.js',
-    'src/features/spaloader.js',
     'src/ui/modal.js'
 ];
 
