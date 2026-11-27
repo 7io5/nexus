@@ -32,7 +32,6 @@
         itemOwners:      { cat: 'features', label: 'Item Owners',              desc: 'Adds an Owners tab to item pages showing every owner, serial, and acquire date.' },
         inventorySearch: { cat: 'features', label: 'Inventory Search',         desc: 'Adds a search bar to your inventory.' },
         quickSearch:     { cat: 'features', label: 'Quick Search',             desc: 'Search users and game results into the search bar at the same time.' },
-        spaLoader:       { cat: 'features', label: 'Smooth Navigation',        desc: 'Prevents page reloads when navigating.' },
         bulkUnfriend:    { cat: 'features', label: 'Bulk Unfriend',            desc: 'Select multiple friends and remove them at once.' },
         rap:             { cat: 'features', label: 'RAP on Profile',           desc: 'Shows total RAP next to profile stats.' },
         removeAds:       { cat: 'features', label: 'Remove Ads',               desc: 'Hides all advertisement banners across the site.' }
@@ -89,12 +88,11 @@
         };
     }
 
-    // Now accepts a shadowRoot to inject styles correctly
     function injectStyle(root) {
         var target = root || document;
-        if (target.getElementById && target.getElementById(STYLE_ID)) return;
-        if (target.querySelector && target.querySelector('#' + STYLE_ID)) return;
-        
+        var exists = target.getElementById ? target.getElementById(STYLE_ID) : target.querySelector('#' + STYLE_ID);
+        if (exists) return;
+
         var s = document.createElement('style');
         s.id = STYLE_ID;
         s.textContent = [
