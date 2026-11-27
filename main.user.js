@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nexus
 // @namespace    https://github.com/zykieboi/nexus
-// @version      1.5.0
+// @version      1.5.1
 // @icon         https://raw.githubusercontent.com/7io5/nexus/main/img/icon.png
 // @author       zykieboi
 // @description  Testing stuff :)
@@ -16,7 +16,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      octomons.wtf
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.0
+// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.1
 // @downloadURL  https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // @updateURL    https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // ==/UserScript==
@@ -32,7 +32,6 @@
     var TAB_CONTENT_HIDE_CLASS = 'nx-hiding';
     var HEADER_FLAG = 'data-nx-swapped';
     var REOPEN_KEY = 'nx_reopen';
-    var BASE_TITLE = null;
 
     var nxOpen = false;
     var reopenConsumed = false;
@@ -61,12 +60,6 @@
             }
         }
         return out;
-    }
-
-    function findShadowRoot(el) {
-        if (!el) return null;
-        if (el.shadowRoot) return el.shadowRoot;
-        return el.getRootNode ? el.getRootNode() : null;
     }
 
     function meId() {
@@ -174,10 +167,6 @@
         if (tab) tab.classList.remove('active');
     }
 
-    // Do not change the title
-    function setTitle() {}
-    function restoreTitle() {}
-
     function swapHeader() {
         var h1 = deepQuery('.user-account-header');
         if (!h1) return;
@@ -207,9 +196,7 @@
         if (existing) existing.remove();
         if (!window.NX.ui.settingsPage || typeof window.NX.ui.settingsPage.build !== 'function') return null;
 
-        // Find the root node of the tabContent to inject styles there
-        var rootNode = findShadowRoot(tabContent);
-        
+        var rootNode = tabContent.getRootNode();
         var panel = window.NX.ui.settingsPage.build(rootNode);
         tabContent.appendChild(panel);
         return panel;
@@ -229,7 +216,6 @@
 
         ensureTab();
         markActive();
-        // setTitle(); -- Disabled
         swapHeader();
     }
 
@@ -241,7 +227,6 @@
         var panel = deepQuery('#' + 'nx-panel');
         if (panel) panel.classList.remove('nx-active');
         clearActive();
-        // restoreTitle(); -- Disabled
         restoreHeader();
     }
 
@@ -253,7 +238,6 @@
         if (tab) tab.remove();
         var tabContent = deepQuery('#settings-container .tab-content');
         if (tabContent) tabContent.classList.remove(TAB_CONTENT_HIDE_CLASS);
-        restoreTitle();
         restoreHeader();
     }
 
