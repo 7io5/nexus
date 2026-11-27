@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nexus
 // @namespace    https://github.com/zykieboi/nexus
-// @version      1.5.2
+// @version      1.5.3
 // @icon         https://raw.githubusercontent.com/7io5/nexus/main/img/icon.png
 // @author       zykieboi
 // @description  Testing stuff :)
@@ -16,7 +16,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      octomons.wtf
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.2
+// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.3
 // @downloadURL  https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // @updateURL    https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // ==/UserScript==
@@ -35,6 +35,7 @@
 
     var nxOpen = false;
     var reopenConsumed = false;
+    var hiddenSiblings = [];
 
     function deepQuery(selector, root) {
         root = root || document;
@@ -177,7 +178,7 @@
         var tabContent = deepQuery('#settings-container .tab-content');
         if (!tabContent) return null;
 
-        var existing = deepQuery('#' + 'nx-panel');
+        var existing = deepQuery('#nx-panel');
         if (existing && existing.parentNode === tabContent) return existing;
 
         if (existing) existing.remove();
@@ -189,6 +190,26 @@
         return panel;
     }
 
+    function hideContent(tabContent) {
+        hiddenSiblings = [];
+        var children = Array.prototype.slice.call(tabContent.children);
+        children.forEach(function (child) {
+            if (child.id === 'nx-panel') return;
+            if (child.style.display === 'none') return;
+            hiddenSiblings.push({ el: child, display: child.style.display });
+            child.style.display = 'none';
+        });
+    }
+
+    function showContent() {
+        hiddenSiblings.forEach(function (item) {
+            if (item.el && item.el.parentNode) {
+                item.el.style.display = item.display;
+            }
+        });
+        hiddenSiblings = [];
+    }
+
     function openNexus() {
         nxOpen = true;
 
@@ -198,17 +219,8 @@
         var panel = ensurePanel();
         if (!panel) return;
 
-        tabContent.classList.add(TAB_CONTENT_HIDE_CLASS);
+        hideContent(tabContent);
         panel.classList.add('nx-active');
-
-        // Force hide old siblings inside the shadow root directly
-        var siblings = Array.prototype.slice.call(tabContent.children);
-        siblings.forEach(function (child) {
-            if (child.id !== 'nx-panel') {
-                child.setAttribute('data-nx-hidden', 'true');
-                child.style.display = 'none';
-            }
-        });
 
         ensureTab();
         markActive();
@@ -218,18 +230,8 @@
     function closeNexus() {
         nxOpen = false;
 
-        var tabContent = deepQuery('#settings-container .tab-content');
-        if (tabContent) {
-            tabContent.classList.remove(TAB_CONTENT_HIDE_CLASS);
-            var siblings = Array.prototype.slice.call(tabContent.children);
-            siblings.forEach(function (child) {
-                if (child.getAttribute('data-nx-hidden') === 'true') {
-                    child.style.display = '';
-                    child.removeAttribute('data-nx-hidden');
-                }
-            });
-        }
-        var panel = deepQuery('#' + 'nx-panel');
+        showContent();
+        var panel = deepQuery('#nx-panel');
         if (panel) panel.classList.remove('nx-active');
         clearActive();
         restoreHeader();
@@ -237,21 +239,11 @@
 
     function purgeNexusPanel() {
         nxOpen = false;
-        var panel = deepQuery('#' + 'nx-panel');
+        showContent();
+        var panel = deepQuery('#nx-panel');
         if (panel) panel.remove();
         var tab = deepQuery('#' + TAB_ID);
         if (tab) tab.remove();
-        var tabContent = deepQuery('#settings-container .tab-content');
-        if (tabContent) {
-            tabContent.classList.remove(TAB_CONTENT_HIDE_CLASS);
-            var siblings = Array.prototype.slice.call(tabContent.children);
-            siblings.forEach(function (child) {
-                if (child.getAttribute('data-nx-hidden') === 'true') {
-                    child.style.display = '';
-                    child.removeAttribute('data-nx-hidden');
-                }
-            });
-        }
         restoreHeader();
     }
 
@@ -271,7 +263,7 @@
         if (!li) return;
         if (li.id === TAB_ID) return;
         try { sessionStorage.removeItem(REOPEN_KEY); } catch (err) {}
-        closeNexus();
+        if (nxOpen) closeNexus();
     }, true);
 
     function consumeReopen() {
@@ -298,21 +290,13 @@
         if (consumeReopen()) { openNexus(); return; }
 
         if (nxOpen) {
-            var tabContent = deepQuery('#settings-container .tab-content');
             var panel = deepQuery('#' + 'nx-panel');
-            if (!panel || panel.parentNode !== tabContent) {
+            if (!panel) {
+                var tabContent = deepQuery('#settings-container .tab-content');
                 var p = ensurePanel();
                 if (p && tabContent) {
-                    tabContent.classList.add(TAB_CONTENT_HIDE_CLASS);
+                    hideContent(tabContent);
                     p.classList.add('nx-active');
-                    
-                    var siblings = Array.prototype.slice.call(tabContent.children);
-                    siblings.forEach(function (child) {
-                        if (child.id !== 'nx-panel') {
-                            child.setAttribute('data-nx-hidden', 'true');
-                            child.style.display = 'none';
-                        }
-                    });
                 }
             }
         }
@@ -394,7 +378,11 @@
     }
     wrapHistory('pushState');
     wrapHistory('replaceState');
-    window.addEventListener('popstate', function () { setTimeout(tick, 0); });
+    window.addEventListener('popstate', function () {
+        setTimeout(tick, 0);
+        setTimeout(tick, 100);
+        setTimeout(tick, 400);
+    });
 
     var booted = false;
     function boot() {
