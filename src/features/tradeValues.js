@@ -13,28 +13,11 @@
     var UP = 'M9 4h6v8h4.84L12 19.84L4.16 12H9V4Z';
     var DOWN = 'M15 20H9v-8H4.16L12 4.16L19.84 12H15v8Z';
 
-    var rootDoc = null;
-    var rootWin = null;
     var myId = null;
     var invCache = new Map();
     var obs = null;
     var scheduled = false;
     var lastKey = null;
-
-    function findDoc() {
-        if (document.querySelector('.trade-list-detail-offer')) {
-            return { doc: document, win: window };
-        }
-        var frames = document.querySelectorAll('iframe');
-        for (var i = 0; i < frames.length; i++) {
-            var d;
-            try { d = frames[i].contentDocument; } catch (e) { continue; }
-            if (d && d.querySelector('.trade-list-detail-offer')) {
-                return { doc: d, win: frames[i].contentWindow };
-            }
-        }
-        return null;
-    }
 
     function fetchJson(url) {
         return fetch(url, { credentials: 'include' }).then(function (r) {
@@ -51,7 +34,7 @@
     }
 
     function getPartnerId() {
-        var a = rootDoc.querySelector('.trade-row.selected a[href*="/users/"]');
+        var a = document.querySelector('.trade-row.selected a[href*="/users/"]');
         if (!a) return null;
         var m = a.getAttribute('href').match(/\/users\/(\d+)\//);
         return m ? m[1] : null;
@@ -107,7 +90,7 @@
     }
 
     function readTrade() {
-        var sides = rootDoc.querySelectorAll('.trade-list-detail-offer');
+        var sides = document.querySelectorAll('.trade-list-detail-offer');
         if (sides.length < 2) return Promise.resolve(null);
 
         var partnerId = getPartnerId();
@@ -130,7 +113,7 @@
 
     function theme() {
         var dark = false;
-        try { dark = rootWin.localStorage.getItem('rbx_theme_v1') === 'dark'; } catch (e) {}
+        try { dark = window.localStorage.getItem('rbx_theme_v1') === 'dark'; } catch (e) {}
         if (dark) return { pillBg: 'rgb(45,47,48)', ink: '#ffffff', rule: 'rgba(255,255,255,0.15)' };
         return { pillBg: 'rgb(200,200,200)', ink: '#000000', rule: '#c7cbce' };
     }
@@ -176,9 +159,9 @@
     }
 
     function mountBlock(tv) {
-        var first = rootDoc.querySelector('.trade-list-detail-offer');
+        var first = document.querySelector('.trade-list-detail-offer');
         if (!first) return;
-        var old = rootDoc.getElementById(BLOCK_ID);
+        var old = document.getElementById(BLOCK_ID);
         if (old && old.dataset.key === tv.key) return;
         var block = buildBlock(tv);
         block.dataset.key = tv.key;
@@ -187,10 +170,10 @@
     }
 
     function mountProtection(tv) {
-        var modal = rootDoc.getElementById('modal-confirmation')
-            || rootDoc.querySelector('.ConfirmationModal[data-modal-handle="confirmation"]');
-        if (!modal || rootWin.getComputedStyle(modal).display === 'none') {
-            var gone = rootDoc.getElementById(PROT_ID);
+        var modal = document.getElementById('modal-confirmation')
+            || document.querySelector('.ConfirmationModal[data-modal-handle="confirmation"]');
+        if (!modal || window.getComputedStyle(modal).display === 'none') {
+            var gone = document.getElementById(PROT_ID);
             if (gone) gone.remove();
             return;
         }
@@ -212,7 +195,7 @@
     }
 
     function flagSerials() {
-        var els = rootDoc.querySelectorAll('.trade-item-card .limited-number');
+        var els = document.querySelectorAll('.trade-item-card .limited-number');
         for (var i = 0; i < els.length; i++) {
             var el = els[i];
             var hidden = el.classList.contains('ng-hide');
@@ -234,11 +217,10 @@
 
     function render() {
         scheduled = false;
-        if (!rootDoc) return;
         readTrade().then(function (tv) {
             if (!tv) {
                 lastKey = null;
-                var old = rootDoc.getElementById(BLOCK_ID);
+                var old = document.getElementById(BLOCK_ID);
                 if (old) old.remove();
                 return;
             }
@@ -256,60 +238,52 @@
     function schedule() {
         if (scheduled) return;
         scheduled = true;
-        rootWin.requestAnimationFrame(render);
+        window.requestAnimationFrame(render);
     }
 
     function attach() {
-        obs = new rootWin.MutationObserver(schedule);
-        var targets = rootDoc.querySelectorAll('.trades-list-detail, .trade-list-detail-offer');
+        obs = new MutationObserver(schedule);
+        var targets = document.querySelectorAll('.trades-list-detail, .trade-list-detail-offer');
         for (var i = 0; i < targets.length; i++) {
             obs.observe(targets[i], { childList: true, subtree: true });
         }
-        rootDoc.addEventListener('click', schedule, true);
-        rootWin.addEventListener('popstate', schedule);
-        rootWin.addEventListener('storage', function (e) {
+        document.addEventListener('click', schedule, true);
+        window.addEventListener('popstate', schedule);
+        window.addEventListener('storage', function (e) {
             if (e.key === 'rbx_theme_v1') { lastKey = null; schedule(); }
         });
     }
 
     window.NX.features.tradeValues = {
         apply: function () {
-            if (rootDoc) return;
-            var found = findDoc();
-            if (!found) return false;
-            rootDoc = found.doc;
-            rootWin = found.win;
+            if (obs) return;
+            if (!document.querySelector('.trade-list-detail-offer')) return;
 
             var stop = Date.now() + 3000;
             (function wait() {
-                if (rootDoc.querySelectorAll('.trade-list-detail-offer').length >= 2) {
+                if (document.querySelectorAll('.trade-list-detail-offer').length >= 2) {
                     render();
                     attach();
                     return;
                 }
                 if (Date.now() > stop) { attach(); return; }
-                rootWin.requestAnimationFrame(wait);
+                window.requestAnimationFrame(wait);
             })();
-            return true;
         },
         teardown: function () {
             if (obs) obs.disconnect();
             obs = null;
-            if (rootDoc) {
-                var a = rootDoc.getElementById(BLOCK_ID);
-                if (a) a.remove();
-                var b = rootDoc.getElementById(PROT_ID);
-                if (b) b.remove();
-                var flagged = rootDoc.querySelectorAll('[data-nx-flag]');
-                for (var i = 0; i < flagged.length; i++) {
-                    flagged[i].style.color = '';
-                    flagged[i].style.fontWeight = '';
-                    flagged[i].title = '';
-                    delete flagged[i].dataset.nxFlag;
-                }
+            var a = document.getElementById(BLOCK_ID);
+            if (a) a.remove();
+            var b = document.getElementById(PROT_ID);
+            if (b) b.remove();
+            var flagged = document.querySelectorAll('[data-nx-flag]');
+            for (var i = 0; i < flagged.length; i++) {
+                flagged[i].style.color = '';
+                flagged[i].style.fontWeight = '';
+                flagged[i].title = '';
+                delete flagged[i].dataset.nxFlag;
             }
-            rootDoc = null;
-            rootWin = null;
             lastKey = null;
             invCache.clear();
         },
