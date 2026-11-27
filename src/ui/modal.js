@@ -89,8 +89,12 @@
         };
     }
 
-    function injectStyle() {
-        if (document.getElementById(STYLE_ID)) return;
+    // Now accepts a shadowRoot to inject styles correctly
+    function injectStyle(root) {
+        var target = root || document;
+        if (target.getElementById && target.getElementById(STYLE_ID)) return;
+        if (target.querySelector && target.querySelector('#' + STYLE_ID)) return;
+        
         var s = document.createElement('style');
         s.id = STYLE_ID;
         s.textContent = [
@@ -118,7 +122,6 @@
             'background:#fff;border-radius:50%;transition:transform .2s}',
             '#' + PANEL_ID + ' .nx-toggle input:checked + .slider{background:#22a24a}',
             '#' + PANEL_ID + ' .nx-toggle input:checked + .slider::before{transform:translateX(20px)}',
-
             '#' + PANEL_ID + ' .nx-dropdown{position:relative;flex-shrink:0}',
             '#' + PANEL_ID + ' .nx-dropdown-btn{display:inline-flex;align-items:center;gap:8px;',
             'padding:7px 12px;background:#fff;color:#232527;border:1px solid #c7cbce;border-radius:6px;',
@@ -151,13 +154,17 @@
             'html.octane-dark #' + PANEL_ID + ' .nx-dropdown-item:hover{background:#3a3d40}',
             '#' + PANEL_ID + ' .nx-dropdown-item.selected{background:#e8f0fe;color:#0a84ff}',
             'html.octane-dark #' + PANEL_ID + ' .nx-dropdown-item.selected{background:#1f3a5f;color:#6cb2ff}',
-
             '#' + PANEL_ID + ' .nx-footer{margin-top:32px;padding-top:20px;border-top:1px solid #e1e4e8;',
             'display:flex;align-items:center}',
             'html.octane-dark #' + PANEL_ID + ' .nx-footer{border-top-color:#3a3d40}',
             '#' + PANEL_ID + ' .nx-version{margin-left:auto;font-size:12px;color:#7a7d80}'
         ].join('');
-        (document.head || document.documentElement).appendChild(s);
+
+        if (target.head) {
+            target.head.appendChild(s);
+        } else {
+            target.appendChild(s);
+        }
     }
 
     function el(tag, cls, text) {
@@ -252,10 +259,10 @@
         return row;
     }
 
-    function build() {
-        injectStyle();
+    function build(shadowRoot) {
+        injectStyle(shadowRoot);
 
-        var existing = document.getElementById(PANEL_ID);
+        var existing = shadowRoot ? shadowRoot.querySelector('#' + PANEL_ID) : document.getElementById(PANEL_ID);
         if (existing) existing.remove();
 
         var page = el('div');
