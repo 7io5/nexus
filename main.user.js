@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nexus
 // @namespace    https://github.com/zykieboi/nexus
-// @version      1.5.1
+// @version      1.5.2
 // @icon         https://raw.githubusercontent.com/7io5/nexus/main/img/icon.png
 // @author       zykieboi
 // @description  Testing stuff :)
@@ -16,7 +16,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      octomons.wtf
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.1
+// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.2
 // @downloadURL  https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // @updateURL    https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // ==/UserScript==
@@ -105,19 +105,6 @@
         return Promise.resolve(null);
     }
     window.NX.refreshRole = refreshRole;
-
-    function accountStyle() {
-        if (document.getElementById('nx-account-style')) return;
-        var s = document.createElement('style');
-        s.id = 'nx-account-style';
-        s.textContent = [
-            '#settings-container .tab-content.' + TAB_CONTENT_HIDE_CLASS + ' > [ui-view]{display:none}',
-            '#settings-container .tab-content.' + TAB_CONTENT_HIDE_CLASS + '{overflow:visible!important;height:auto!important;max-height:none!important}',
-            '#settings-container:has(.tab-content.' + TAB_CONTENT_HIDE_CLASS + '){overflow:visible!important;height:auto!important;max-height:none!important}',
-            '#' + TAB_ID + '{cursor:pointer}'
-        ].join('');
-        (document.head || document.documentElement).appendChild(s);
-    }
 
     function makeTabLi() {
         var li = document.createElement('li');
@@ -214,6 +201,15 @@
         tabContent.classList.add(TAB_CONTENT_HIDE_CLASS);
         panel.classList.add('nx-active');
 
+        // Force hide old siblings inside the shadow root directly
+        var siblings = Array.prototype.slice.call(tabContent.children);
+        siblings.forEach(function (child) {
+            if (child.id !== 'nx-panel') {
+                child.setAttribute('data-nx-hidden', 'true');
+                child.style.display = 'none';
+            }
+        });
+
         ensureTab();
         markActive();
         swapHeader();
@@ -223,7 +219,16 @@
         nxOpen = false;
 
         var tabContent = deepQuery('#settings-container .tab-content');
-        if (tabContent) tabContent.classList.remove(TAB_CONTENT_HIDE_CLASS);
+        if (tabContent) {
+            tabContent.classList.remove(TAB_CONTENT_HIDE_CLASS);
+            var siblings = Array.prototype.slice.call(tabContent.children);
+            siblings.forEach(function (child) {
+                if (child.getAttribute('data-nx-hidden') === 'true') {
+                    child.style.display = '';
+                    child.removeAttribute('data-nx-hidden');
+                }
+            });
+        }
         var panel = deepQuery('#' + 'nx-panel');
         if (panel) panel.classList.remove('nx-active');
         clearActive();
@@ -237,7 +242,16 @@
         var tab = deepQuery('#' + TAB_ID);
         if (tab) tab.remove();
         var tabContent = deepQuery('#settings-container .tab-content');
-        if (tabContent) tabContent.classList.remove(TAB_CONTENT_HIDE_CLASS);
+        if (tabContent) {
+            tabContent.classList.remove(TAB_CONTENT_HIDE_CLASS);
+            var siblings = Array.prototype.slice.call(tabContent.children);
+            siblings.forEach(function (child) {
+                if (child.getAttribute('data-nx-hidden') === 'true') {
+                    child.style.display = '';
+                    child.removeAttribute('data-nx-hidden');
+                }
+            });
+        }
         restoreHeader();
     }
 
@@ -271,8 +285,6 @@
     }
 
     function panelTick() {
-        accountStyle();
-
         if (!isAccountPage()) {
             if (deepQuery('#' + TAB_ID) || deepQuery('#' + 'nx-panel')) purgeNexusPanel();
             return;
@@ -293,6 +305,14 @@
                 if (p && tabContent) {
                     tabContent.classList.add(TAB_CONTENT_HIDE_CLASS);
                     p.classList.add('nx-active');
+                    
+                    var siblings = Array.prototype.slice.call(tabContent.children);
+                    siblings.forEach(function (child) {
+                        if (child.id !== 'nx-panel') {
+                            child.setAttribute('data-nx-hidden', 'true');
+                            child.style.display = 'none';
+                        }
+                    });
                 }
             }
         }
