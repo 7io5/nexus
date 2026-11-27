@@ -185,8 +185,6 @@
     var AVATAR_HEADSHOT = 'https://thumbnails.octane.wtf/v1/users/avatar-headshot?userIds=';
     var STYLE_ID = 'nx-rap-style';
 
-    var isTop = window.top === window.self;
-
     var items = [];
     var thumbs = {};
     var detailsCache = null;
@@ -214,9 +212,7 @@
         61: 'Plugin', 62: 'Font Family'
     };
 
-    var CHECK_ASSET_TYPE = [
-        'Hat'
-    ];
+    var CHECK_ASSET_TYPE = ['Hat'];
 
     function shortNum(n) {
         n = Number(n) || 0;
@@ -1459,7 +1455,7 @@
             span.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                window.top.postMessage({ type: MSG_OPEN, userId: userId, username: name }, '*');
+                openModal(userId, name);
             });
         }
 
@@ -1472,7 +1468,7 @@
             link.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                window.top.postMessage({ type: MSG_OPEN, userId: userId, username: name }, '*');
+                openModal(userId, name);
             });
         }
 
@@ -1527,37 +1523,28 @@
 
     window.NX.features.rap = {
         apply: function () {
-            if (isTop) {
-                if (styleWatchBound) return;
-                styleWatchBound = true;
-                window.addEventListener('message', onMessage);
-                window.addEventListener('octane-theme-change', onThemeChange);
-                window.addEventListener('storage', onStorage);
-            } else {
-                var row = document.querySelector('.nx-rap-row');
-                if (row) return;
-                startRowScanner();
-            }
+            if (styleWatchBound) return;
+            styleWatchBound = true;
+            window.addEventListener('message', onMessage);
+            window.addEventListener('octane-theme-change', onThemeChange);
+            window.addEventListener('storage', onStorage);
+            startRowScanner();
         },
         teardown: function () {
             stopRowScanner();
-
-            if (isTop) {
-                window.removeEventListener('message', onMessage);
-                if (styleWatchBound) {
-                    window.removeEventListener('octane-theme-change', onThemeChange);
-                    window.removeEventListener('storage', onStorage);
-                    styleWatchBound = false;
-                }
-                closeModal();
-                var overlay = document.getElementById(OVERLAY_ID);
-                if (overlay) overlay.remove();
-                var style = document.getElementById(STYLE_ID);
-                if (style) style.remove();
-            } else {
-                var row = document.querySelector('.nx-rap-row');
-                if (row) row.remove();
+            window.removeEventListener('message', onMessage);
+            if (styleWatchBound) {
+                window.removeEventListener('octane-theme-change', onThemeChange);
+                window.removeEventListener('storage', onStorage);
+                styleWatchBound = false;
             }
+            closeModal();
+            var overlay = document.getElementById(OVERLAY_ID);
+            if (overlay) overlay.remove();
+            var style = document.getElementById(STYLE_ID);
+            if (style) style.remove();
+            var row = document.querySelector('.nx-rap-row');
+            if (row) row.remove();
         }
     };
 })();
