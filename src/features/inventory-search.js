@@ -8,6 +8,32 @@
     var STYLE_ID = 'nx-inv-search-style';
     var TRY_LIMIT = 40;
 
+    function deepQuery(selector, root) {
+        root = root || document;
+        var found = root.querySelector(selector);
+        if (found) return found;
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                var r = deepQuery(selector, hosts[i].shadowRoot);
+                if (r) return r;
+            }
+        }
+        return null;
+    }
+
+    function deepQueryAll(selector, root) {
+        root = root || document;
+        var out = Array.prototype.slice.call(root.querySelectorAll(selector));
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                out = out.concat(deepQueryAll(selector, hosts[i].shadowRoot));
+            }
+        }
+        return out;
+    }
+
     function isAllowedPage() {
         var path = location.pathname;
         if (/^\/users\/\d+\/inventory(\/|$)/.test(path)) return true;
@@ -19,7 +45,7 @@
     }
 
     function removeExisting() {
-        var existing = document.getElementById(WRAP_ID);
+        var existing = deepQuery('#' + WRAP_ID);
         if (existing) existing.remove();
         var style = document.getElementById(STYLE_ID);
         if (style) style.remove();
@@ -50,7 +76,7 @@
     }
 
     function findContainer() {
-        var cards = document.querySelectorAll('.item-card');
+        var cards = deepQueryAll('.item-card');
         if (!cards.length) return null;
 
         var parent = cards[0].parentElement;
@@ -73,7 +99,7 @@
 
     function filter(query) {
         var q = (query || '').toLowerCase().trim();
-        var cards = document.querySelectorAll('.item-card');
+        var cards = deepQueryAll('.item-card');
         for (var i = 0; i < cards.length; i++) {
             var card = cards[i];
             var nameEl = card.querySelector('.item-card-name');
@@ -84,7 +110,7 @@
     }
 
     function build() {
-        if (document.getElementById(WRAP_ID)) return true;
+        if (deepQuery('#' + WRAP_ID)) return true;
         if (!isAllowedPage()) return false;
 
         var container = findContainer();
@@ -143,7 +169,7 @@
                 removeExisting();
                 return;
             }
-            if (document.getElementById(WRAP_ID)) return;
+            if (deepQuery('#' + WRAP_ID)) return;
             style();
             if (build()) return;
             scheduleRetry();
@@ -151,7 +177,7 @@
         teardown: function() {
             stopScanner();
             removeExisting();
-            var cards = document.querySelectorAll('.item-card');
+            var cards = deepQueryAll('.item-card');
             for (var i = 0; i < cards.length; i++) cards[i].style.display = '';
         }
     };
