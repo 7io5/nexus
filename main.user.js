@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nexus
 // @namespace    https://github.com/zykieboi/nexus
-// @version      1.4.5
+// @version      1.4.6
 // @icon         https://raw.githubusercontent.com/7io5/nexus/main/img/icon.png
 // @author       zykieboi
 // @description  Testing stuff :)
@@ -16,7 +16,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      octomons.wtf
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=15.6
+// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=15.7
 // @downloadURL  https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // @updateURL    https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // ==/UserScript==
@@ -28,24 +28,24 @@
     window.NX.ui = window.NX.ui || {};
     window.NX.role = null;
 
-    var TAB_ID = 'nx-tab';
-    var TAB_CONTENT_HIDE_CLASS = 'nx-hiding';
-    var HEADER_FLAG = 'data-nx-swapped';
-    var REOPEN_KEY = 'nx_reopen';
+    var TAB_ID = 'tab';
+    var TAB_CONTENT_HIDE_CLASS = 'hiding';
+    var HEADER_FLAG = 'data-swapped';
+    var REOPEN_KEY = 'reopen';
     var BASE_TITLE = null;
 
-    var nxOpen = false;
+    var open = false;
     var reopenConsumed = false;
 
     function meId() {
-        var id = parseInt(localStorage.getItem('nx_me_id') || '0', 10);
+        var id = parseInt(localStorage.getItem('me_id') || '0', 10);
         if (id) return id;
         try {
             var u = window.__NEXT_DATA__ && window.__NEXT_DATA__.props
                 && window.__NEXT_DATA__.props.pageProps
                 && window.__NEXT_DATA__.props.pageProps.user;
             if (u && u.id) {
-                localStorage.setItem('nx_me_id', String(u.id));
+                localStorage.setItem('me_id', String(u.id));
                 return u.id;
             }
         } catch (e) {}
@@ -54,7 +54,7 @@
             var m = (a.getAttribute('href') || '').match(/\/users\/(\d+)\/profile/);
             if (m) {
                 id = parseInt(m[1], 10);
-                localStorage.setItem('nx_me_id', String(id));
+                localStorage.setItem('me_id', String(id));
                 return id;
             }
         }
@@ -82,9 +82,9 @@
     window.NX.refreshRole = refreshRole;
 
     function accountStyle() {
-        if (document.getElementById('nx-account-style')) return;
+        if (document.getElementById('account-style')) return;
         var s = document.createElement('style');
-        s.id = 'nx-account-style';
+        s.id = 'account-style';
         s.textContent = [
             '#settings-container .tab-content.' + TAB_CONTENT_HIDE_CLASS + ' > [ui-view]{display:none}',
             '#settings-container .tab-content.' + TAB_CONTENT_HIDE_CLASS + '{overflow:visible!important;height:auto!important;max-height:none!important}',
@@ -156,7 +156,7 @@
         if (!h1) return;
         if (h1.getAttribute(HEADER_FLAG) === '1') return;
         h1.setAttribute(HEADER_FLAG, '1');
-        h1.setAttribute('data-nx-original', h1.textContent);
+        h1.setAttribute('data-original', h1.textContent);
         h1.textContent = 'My Nexus Settings';
     }
 
@@ -164,17 +164,17 @@
         var h1 = document.querySelector('.user-account-header');
         if (!h1) return;
         if (h1.getAttribute(HEADER_FLAG) !== '1') return;
-        var orig = h1.getAttribute('data-nx-original');
+        var orig = h1.getAttribute('data-original');
         if (orig) h1.textContent = orig;
         h1.removeAttribute(HEADER_FLAG);
-        h1.removeAttribute('data-nx-original');
+        h1.removeAttribute('data-original');
     }
 
     function ensurePanel() {
         var tabContent = document.querySelector('#settings-container .tab-content');
         if (!tabContent) return null;
 
-        var existing = document.getElementById('nx-panel');
+        var existing = document.getElementById('panel');
         if (existing && existing.parentNode === tabContent) return existing;
 
         if (existing) existing.remove();
@@ -186,7 +186,7 @@
     }
 
     function openNexus() {
-        nxOpen = true;
+        open = true;
 
         var tabContent = document.querySelector('#settings-container .tab-content');
         if (!tabContent) return;
@@ -195,7 +195,7 @@
         if (!panel) return;
 
         tabContent.classList.add(TAB_CONTENT_HIDE_CLASS);
-        panel.classList.add('nx-active');
+        panel.classList.add('active');
 
         ensureTab();
         markActive();
@@ -204,20 +204,20 @@
     }
 
     function closeNexus() {
-        nxOpen = false;
+        open = false;
 
         var tabContent = document.querySelector('#settings-container .tab-content');
         if (tabContent) tabContent.classList.remove(TAB_CONTENT_HIDE_CLASS);
-        var panel = document.getElementById('nx-panel');
-        if (panel) panel.classList.remove('nx-active');
+        var panel = document.getElementById('panel');
+        if (panel) panel.classList.remove('active');
         clearActive();
         restoreTitle();
         restoreHeader();
     }
 
     function purgeNexusPanel() {
-        nxOpen = false;
-        var panel = document.getElementById('nx-panel');
+        open = false;
+        var panel = document.getElementById('panel');
         if (panel) panel.remove();
         var tab = document.getElementById(TAB_ID);
         if (tab) tab.remove();
@@ -260,7 +260,7 @@
         accountStyle();
 
         if (!isAccountPage()) {
-            if (document.getElementById(TAB_ID) || document.getElementById('nx-panel')) purgeNexusPanel();
+            if (document.getElementById(TAB_ID) || document.getElementById('panel')) purgeNexusPanel();
             return;
         }
 
@@ -271,14 +271,14 @@
 
         if (consumeReopen()) { openNexus(); return; }
 
-        if (nxOpen) {
+        if (open) {
             var tabContent = document.querySelector('#settings-container .tab-content');
-            var panel = document.getElementById('nx-panel');
+            var panel = document.getElementById('panel');
             if (!panel || panel.parentNode !== tabContent) {
                 var p = ensurePanel();
                 if (p && tabContent) {
                     tabContent.classList.add(TAB_CONTENT_HIDE_CLASS);
-                    p.classList.add('nx-active');
+                    p.classList.add('active');
                 }
             }
         }
@@ -286,8 +286,8 @@
 
     function observeMenu() {
         var list = document.getElementById('vertical-menu');
-        if (!list || list.__nxWatched) return;
-        list.__nxWatched = true;
+        if (!list || list.__watched) return;
+        list.__watched = true;
         new MutationObserver(function () {
             if (!document.getElementById(TAB_ID)) ensureTab();
         }).observe(list, { childList: true });
@@ -304,7 +304,6 @@
         if (s.get('inventorySearch') && f.inventorySearch) f.inventorySearch.apply();
         if (s.get('bulkUnfriend') && f.bulkUnfriend) f.bulkUnfriend.apply();
         if (s.get('customLogo') && f.customLogo) f.customLogo.apply();
-        if (s.get('spaloader') && f.spaloader) f.spaloader.apply();
         if (s.get('hideChat') && f.hideChat) f.hideChat.apply();
         if (s.get('customFont') && f.customFont) f.customFont.apply();
         if (s.get('nexusPanel') && f.nexusPanel) f.nexusPanel.apply();
@@ -334,7 +333,6 @@
             if (s.get('userBadge') && ub) ub.apply();
             if (s.get('tradeValues') && tv) tv.apply();
             if (s.get('snow') && f.snow) f.snow.apply();
-            if (s.get('spaloader') && f.spaloader) f.spaloader.apply();
             return;
         }
 
@@ -346,7 +344,6 @@
         if (s.get('tradeValues') && f.tradeValues) f.tradeValues.apply();
         if (s.get('quickSearch') && f.quickSearch) f.quickSearch.apply();
         if (s.get('snow') && f.snow) f.snow.apply();
-        if (s.get('spaloader') && f.spaloader) f.spaloader.apply();
     }
 
     var tries = 0;
