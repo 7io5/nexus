@@ -164,7 +164,12 @@
         input.checked = panelSettings().get(key);
 
         input.addEventListener('change', function () {
-            panelSettings().set(key, input.checked);
+            // Force save directly to the fallback mechanism
+            writeLS(key, input.checked ? '1' : '0');
+            if (window.NX.settings && typeof window.NX.settings.set === 'function') {
+                window.NX.settings.set(key, input.checked);
+            }
+
             var f = window.NX.features[key];
             if (!f) return;
             if (input.checked && typeof f.apply === 'function') f.apply();
@@ -203,7 +208,11 @@
             var item = el('div', 'nx-dropdown-item' + (opt.id === current.id ? ' selected' : ''), opt.label);
             item.addEventListener('click', function (e) {
                 e.stopPropagation();
-                panelSettings().setString(key + 'Id', opt.id);
+                writeLS(key + 'Id', opt.id);
+                if (window.NX.settings && typeof window.NX.settings.setString === 'function') {
+                    window.NX.settings.setString(key + 'Id', opt.id);
+                }
+
                 var feat = window.NX.features[key];
                 if (feat) {
                     if (typeof feat.setFontId === 'function') feat.setFontId(opt.id);
