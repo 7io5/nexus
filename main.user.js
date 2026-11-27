@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nexus
 // @namespace    https://github.com/zykieboi/nexus
-// @version      1.5.7
+// @version      1.5.8
 // @icon         https://raw.githubusercontent.com/7io5/nexus/main/img/icon.png
 // @author       zykieboi
 // @description  Testing stuff :)
@@ -16,7 +16,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      octomons.wtf
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.7
+// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.8
 // @downloadURL  https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // @updateURL    https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // ==/UserScript==
@@ -327,26 +327,37 @@
         }).observe(list, { childList: true });
     }
 
+    function getSetting(k) {
+        if (window.NX.settings && typeof window.NX.settings.get === 'function') {
+            var v = window.NX.settings.get(k);
+            if (v !== undefined && v !== null) return v;
+        }
+        try {
+            return localStorage.getItem('nx_' + k) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
     function applyAll() {
         var f = window.NX.features;
-        var s = window.NX.settings;
-        if (!f || !s) return;
+        if (!f) return;
 
-        if (s.get('removeAds') && f.removeAds) f.removeAds.apply();
-        if (s.get('hideAlert') && f.hideAlert) f.hideAlert.apply();
-        if (s.get('rap') && f.rap) f.rap.apply();
-        if (s.get('inventorySearch') && f.inventorySearch) f.inventorySearch.apply();
-        if (s.get('bulkUnfriend') && f.bulkUnfriend) f.bulkUnfriend.apply();
-        if (s.get('customLogo') && f.customLogo) f.customLogo.apply();
-        if (s.get('hideChat') && f.hideChat) f.hideChat.apply();
-        if (s.get('customFont') && f.customFont) f.customFont.apply();
-        if (s.get('nexusPanel') && f.nexusPanel) f.nexusPanel.apply();
-        if (s.get('background') && f.background) f.background.apply();
-        if (s.get('userBadge') && f.userBadge) f.userBadge.apply();
-        if (s.get('tradeValues') && f.tradeValues) f.tradeValues.apply();
-        if (s.get('itemOwners') && f.itemOwners) f.itemOwners.apply();
-        if (s.get('quickSearch') && f.quickSearch) f.quickSearch.apply();
-        if (s.get('snow') && f.snow) f.snow.apply();
+        if (getSetting('removeAds') && f.removeAds) f.removeAds.apply();
+        if (getSetting('hideAlert') && f.hideAlert) f.hideAlert.apply();
+        if (getSetting('rap') && f.rap) f.rap.apply();
+        if (getSetting('inventorySearch') && f.inventorySearch) f.inventorySearch.apply();
+        if (getSetting('bulkUnfriend') && f.bulkUnfriend) f.bulkUnfriend.apply();
+        if (getSetting('customLogo') && f.customLogo) f.customLogo.apply();
+        if (getSetting('hideChat') && f.hideChat) f.hideChat.apply();
+        if (getSetting('customFont') && f.customFont) f.customFont.apply();
+        if (getSetting('nexusPanel') && f.nexusPanel) f.nexusPanel.apply();
+        if (getSetting('background') && f.background) f.background.apply();
+        if (getSetting('userBadge') && f.userBadge) f.userBadge.apply();
+        if (getSetting('tradeValues') && f.tradeValues) f.tradeValues.apply();
+        if (getSetting('itemOwners') && f.itemOwners) f.itemOwners.apply();
+        if (getSetting('quickSearch') && f.quickSearch) f.quickSearch.apply();
+        if (getSetting('snow') && f.snow) f.snow.apply();
         if (f.announcement) f.announcement.apply();
     }
 
@@ -354,19 +365,19 @@
         panelTick();
 
         var f = window.NX.features;
-        var s = window.NX.settings;
-        if (!f || !s) return;
+        if (!f) return;
 
-        if (s.get('removeAds') && f.removeAds) f.removeAds.apply();
-        if (s.get('hideAlert') && f.hideAlert) f.hideAlert.apply();
-        if (s.get('rap') && f.rap) f.rap.apply();
-        if (s.get('inventorySearch') && f.inventorySearch) f.inventorySearch.apply();
-        if (s.get('bulkUnfriend') && f.bulkUnfriend) f.bulkUnfriend.apply();
-        if (s.get('tradeValues') && f.tradeValues) f.tradeValues.apply();
-        if (s.get('quickSearch') && f.quickSearch) f.quickSearch.apply();
-        if (s.get('snow') && f.snow) f.snow.apply();
-        if (s.get('background') && f.background) f.background.apply();
-        if (s.get('userBadge') && f.userBadge) f.userBadge.apply();
+        if (getSetting('removeAds') && f.removeAds) f.removeAds.apply();
+        if (getSetting('hideAlert') && f.hideAlert) f.hideAlert.apply();
+        if (getSetting('rap') && f.rap) f.rap.apply();
+        if (getSetting('inventorySearch') && f.inventorySearch) f.inventorySearch.apply();
+        if (getSetting('bulkUnfriend') && f.bulkUnfriend) f.bulkUnfriend.apply();
+        if (getSetting('tradeValues') && f.tradeValues) f.tradeValues.apply();
+        if (getSetting('quickSearch') && f.quickSearch) f.quickSearch.apply();
+        if (getSetting('snow') && f.snow) f.snow.apply();
+        if (getSetting('background') && f.background) f.background.apply();
+        if (getSetting('userBadge') && f.userBadge) f.userBadge.apply();
+        if (getSetting('customFont') && f.customFont) f.customFont.apply();
     }
 
     var tries = 0;
