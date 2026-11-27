@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nexus
 // @namespace    https://github.com/zykieboi/nexus
-// @version      1.5.4
+// @version      1.5.6
 // @icon         https://raw.githubusercontent.com/7io5/nexus/main/img/icon.png
 // @author       zykieboi
 // @description  Testing stuff :)
@@ -16,7 +16,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      octomons.wtf
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.4
+// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.6
 // @downloadURL  https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // @updateURL    https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // ==/UserScript==
@@ -197,9 +197,18 @@
         var panel = ensurePanel();
         if (!panel) return;
 
-        // Apply the .nx-hiding class (this is what actually hides the old content)
-        tabContent.classList.add('nx-hiding');
+        // Hide ALL siblings inside the tab content directly
+        var children = Array.prototype.slice.call(tabContent.children);
+        children.forEach(function (child) {
+            if (child.id !== 'nx-panel') {
+                child.setAttribute('data-nx-hidden', 'true');
+                child.style.display = 'none';
+            }
+        });
+
+        // Ensure the panel is visible
         panel.classList.add('nx-active');
+        panel.style.display = 'block';
 
         ensureTab();
         markActive();
@@ -210,9 +219,23 @@
         nxOpen = false;
 
         var tabContent = deepQuery('#settings-container .tab-content');
-        if (tabContent) tabContent.classList.remove('nx-hiding');
+        if (tabContent) {
+            // Restore all hidden siblings
+            var children = Array.prototype.slice.call(tabContent.children);
+            children.forEach(function (child) {
+                if (child.getAttribute('data-nx-hidden') === 'true') {
+                    child.style.display = '';
+                    child.removeAttribute('data-nx-hidden');
+                }
+            });
+        }
+
         var panel = deepQuery('#nx-panel');
-        if (panel) panel.classList.remove('nx-active');
+        if (panel) {
+            panel.classList.remove('nx-active');
+            panel.style.display = 'none';
+        }
+
         clearActive();
         restoreHeader();
     }
@@ -224,7 +247,15 @@
         var tab = deepQuery('#' + TAB_ID);
         if (tab) tab.remove();
         var tabContent = deepQuery('#settings-container .tab-content');
-        if (tabContent) tabContent.classList.remove('nx-hiding');
+        if (tabContent) {
+            var children = Array.prototype.slice.call(tabContent.children);
+            children.forEach(function (child) {
+                if (child.getAttribute('data-nx-hidden') === 'true') {
+                    child.style.display = '';
+                    child.removeAttribute('data-nx-hidden');
+                }
+            });
+        }
         restoreHeader();
     }
 
@@ -276,8 +307,15 @@
             if (!panel || panel.parentNode !== tabContent) {
                 var p = ensurePanel();
                 if (p && tabContent) {
-                    tabContent.classList.add('nx-hiding');
+                    var children = Array.prototype.slice.call(tabContent.children);
+                    children.forEach(function (child) {
+                        if (child.id !== 'nx-panel') {
+                            child.setAttribute('data-nx-hidden', 'true');
+                            child.style.display = 'none';
+                        }
+                    });
                     p.classList.add('nx-active');
+                    p.style.display = 'block';
                 }
             }
         }
@@ -350,6 +388,9 @@
     function wrapHistory(name) {
         var orig = history[name];
         history[name] = function () {
+            // Force close Nexus before navigating to restore the DOM
+            if (nxOpen) closeNexus();
+
             var r = orig.apply(this, arguments);
             setTimeout(tick, 0);
             setTimeout(tick, 100);
@@ -360,6 +401,7 @@
     wrapHistory('pushState');
     wrapHistory('replaceState');
     window.addEventListener('popstate', function () {
+        if (nxOpen) closeNexus();
         setTimeout(tick, 0);
         setTimeout(tick, 100);
         setTimeout(tick, 400);
