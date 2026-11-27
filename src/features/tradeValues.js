@@ -19,6 +19,32 @@
     var scheduled = false;
     var lastKey = null;
 
+    function deepQuery(selector, root) {
+        root = root || document;
+        var found = root.querySelector(selector);
+        if (found) return found;
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                var r = deepQuery(selector, hosts[i].shadowRoot);
+                if (r) return r;
+            }
+        }
+        return null;
+    }
+
+    function deepQueryAll(selector, root) {
+        root = root || document;
+        var out = Array.prototype.slice.call(root.querySelectorAll(selector));
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                out = out.concat(deepQueryAll(selector, hosts[i].shadowRoot));
+            }
+        }
+        return out;
+    }
+
     function fetchJson(url) {
         return fetch(url, { credentials: 'include' }).then(function (r) {
             return r.ok ? r.json() : null;
@@ -34,7 +60,7 @@
     }
 
     function getPartnerId() {
-        var a = document.querySelector('.trade-row.selected a[href*="/users/"]');
+        var a = deepQuery('.trade-row.selected a[href*="/users/"]');
         if (!a) return null;
         var m = a.getAttribute('href').match(/\/users\/(\d+)\//);
         return m ? m[1] : null;
@@ -90,7 +116,7 @@
     }
 
     function readTrade() {
-        var sides = document.querySelectorAll('.trade-list-detail-offer');
+        var sides = deepQueryAll('.trade-list-detail-offer');
         if (sides.length < 2) return Promise.resolve(null);
 
         var partnerId = getPartnerId();
@@ -159,9 +185,9 @@
     }
 
     function mountBlock(tv) {
-        var first = document.querySelector('.trade-list-detail-offer');
+        var first = deepQuery('.trade-list-detail-offer');
         if (!first) return;
-        var old = document.getElementById(BLOCK_ID);
+        var old = deepQuery('#' + BLOCK_ID);
         if (old && old.dataset.key === tv.key) return;
         var block = buildBlock(tv);
         block.dataset.key = tv.key;
@@ -170,10 +196,10 @@
     }
 
     function mountProtection(tv) {
-        var modal = document.getElementById('modal-confirmation')
-            || document.querySelector('.ConfirmationModal[data-modal-handle="confirmation"]');
+        var modal = deepQuery('#modal-confirmation')
+            || deepQuery('.ConfirmationModal[data-modal-handle="confirmation"]');
         if (!modal || window.getComputedStyle(modal).display === 'none') {
-            var gone = document.getElementById(PROT_ID);
+            var gone = deepQuery('#' + PROT_ID);
             if (gone) gone.remove();
             return;
         }
@@ -195,7 +221,7 @@
     }
 
     function flagSerials() {
-        var els = document.querySelectorAll('.trade-item-card .limited-number');
+        var els = deepQueryAll('.trade-item-card .limited-number');
         for (var i = 0; i < els.length; i++) {
             var el = els[i];
             var hidden = el.classList.contains('ng-hide');
@@ -220,7 +246,7 @@
         readTrade().then(function (tv) {
             if (!tv) {
                 lastKey = null;
-                var old = document.getElementById(BLOCK_ID);
+                var old = deepQuery('#' + BLOCK_ID);
                 if (old) old.remove();
                 return;
             }
@@ -243,7 +269,7 @@
 
     function attach() {
         obs = new MutationObserver(schedule);
-        var targets = document.querySelectorAll('.trades-list-detail, .trade-list-detail-offer');
+        var targets = deepQueryAll('.trades-list-detail, .trade-list-detail-offer');
         for (var i = 0; i < targets.length; i++) {
             obs.observe(targets[i], { childList: true, subtree: true });
         }
@@ -257,11 +283,11 @@
     window.NX.features.tradeValues = {
         apply: function () {
             if (obs) return;
-            if (!document.querySelector('.trade-list-detail-offer')) return;
+            if (!deepQuery('.trade-list-detail-offer')) return;
 
             var stop = Date.now() + 3000;
             (function wait() {
-                if (document.querySelectorAll('.trade-list-detail-offer').length >= 2) {
+                if (deepQueryAll('.trade-list-detail-offer').length >= 2) {
                     render();
                     attach();
                     return;
@@ -273,11 +299,11 @@
         teardown: function () {
             if (obs) obs.disconnect();
             obs = null;
-            var a = document.getElementById(BLOCK_ID);
+            var a = deepQuery('#' + BLOCK_ID);
             if (a) a.remove();
-            var b = document.getElementById(PROT_ID);
+            var b = deepQuery('#' + PROT_ID);
             if (b) b.remove();
-            var flagged = document.querySelectorAll('[data-nx-flag]');
+            var flagged = deepQueryAll('[data-nx-flag]');
             for (var i = 0; i < flagged.length; i++) {
                 flagged[i].style.color = '';
                 flagged[i].style.fontWeight = '';
