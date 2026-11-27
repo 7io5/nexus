@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nexus
 // @namespace    https://github.com/zykieboi/nexus
-// @version      1.5.6
+// @version      1.5.7
 // @icon         https://raw.githubusercontent.com/7io5/nexus/main/img/icon.png
 // @author       zykieboi
 // @description  Testing stuff :)
@@ -16,7 +16,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      octomons.wtf
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.6
+// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.7
 // @downloadURL  https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // @updateURL    https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // ==/UserScript==
@@ -197,7 +197,6 @@
         var panel = ensurePanel();
         if (!panel) return;
 
-        // Hide ALL siblings inside the tab content directly
         var children = Array.prototype.slice.call(tabContent.children);
         children.forEach(function (child) {
             if (child.id !== 'nx-panel') {
@@ -206,7 +205,6 @@
             }
         });
 
-        // Ensure the panel is visible
         panel.classList.add('nx-active');
         panel.style.display = 'block';
 
@@ -220,7 +218,6 @@
 
         var tabContent = deepQuery('#settings-container .tab-content');
         if (tabContent) {
-            // Restore all hidden siblings
             var children = Array.prototype.slice.call(tabContent.children);
             children.forEach(function (child) {
                 if (child.getAttribute('data-nx-hidden') === 'true') {
@@ -388,9 +385,7 @@
     function wrapHistory(name) {
         var orig = history[name];
         history[name] = function () {
-            // Force close Nexus before navigating to restore the DOM
             if (nxOpen) closeNexus();
-
             var r = orig.apply(this, arguments);
             setTimeout(tick, 0);
             setTimeout(tick, 100);
