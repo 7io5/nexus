@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nexus
 // @namespace    https://github.com/zykieboi/nexus
-// @version      1.4.6
+// @version      1.4.7
 // @icon         https://raw.githubusercontent.com/7io5/nexus/main/img/icon.png
 // @author       zykieboi
 // @description  Testing stuff :)
@@ -16,7 +16,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      octomons.wtf
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=15.7
+// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=15.8
 // @downloadURL  https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // @updateURL    https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // ==/UserScript==
@@ -37,6 +37,32 @@
     var open = false;
     var reopenConsumed = false;
 
+    function deepQuery(selector, root) {
+        root = root || document;
+        var found = root.querySelector(selector);
+        if (found) return found;
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                var r = deepQuery(selector, hosts[i].shadowRoot);
+                if (r) return r;
+            }
+        }
+        return null;
+    }
+
+    function deepQueryAll(selector, root) {
+        root = root || document;
+        var out = Array.prototype.slice.call(root.querySelectorAll(selector));
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                out = out.concat(deepQueryAll(selector, hosts[i].shadowRoot));
+            }
+        }
+        return out;
+    }
+
     function meId() {
         var id = parseInt(localStorage.getItem('me_id') || '0', 10);
         if (id) return id;
@@ -49,7 +75,7 @@
                 return u.id;
             }
         } catch (e) {}
-        var a = document.querySelector('a[href*="/users/"][href*="/profile"]');
+        var a = deepQuery('a[href*="/users/"][href*="/profile"]');
         if (a) {
             var m = (a.getAttribute('href') || '').match(/\/users\/(\d+)\/profile/);
             if (m) {
@@ -68,7 +94,7 @@
                 && window.__NEXT_DATA__.props.pageProps.user;
             if (u && (u.name || u.username)) return u.name || u.username;
         } catch (e) {}
-        var el = document.querySelector('.age-bracket-label-username');
+        var el = deepQuery('.age-bracket-label-username');
         if (el && el.textContent) return el.textContent.trim().replace(/^@/, '');
         return '';
     }
@@ -119,15 +145,15 @@
     }
 
     function ensureTab() {
-        var list = document.getElementById('vertical-menu');
+        var list = deepQuery('#vertical-menu');
         if (!list) return false;
-        if (document.getElementById(TAB_ID)) return true;
+        if (deepQuery('#' + TAB_ID)) return true;
         list.appendChild(makeTabLi());
         return true;
     }
 
     function markActive() {
-        var list = document.getElementById('vertical-menu');
+        var list = deepQuery('#vertical-menu');
         if (!list) return;
         requestAnimationFrame(function () {
             list.querySelectorAll('.menu-option').forEach(function (li) {
@@ -138,7 +164,7 @@
     }
 
     function clearActive() {
-        var tab = document.getElementById(TAB_ID);
+        var tab = deepQuery('#' + TAB_ID);
         if (tab) tab.classList.remove('active');
     }
 
@@ -152,7 +178,7 @@
     }
 
     function swapHeader() {
-        var h1 = document.querySelector('.user-account-header');
+        var h1 = deepQuery('.user-account-header');
         if (!h1) return;
         if (h1.getAttribute(HEADER_FLAG) === '1') return;
         h1.setAttribute(HEADER_FLAG, '1');
@@ -161,7 +187,7 @@
     }
 
     function restoreHeader() {
-        var h1 = document.querySelector('.user-account-header');
+        var h1 = deepQuery('.user-account-header');
         if (!h1) return;
         if (h1.getAttribute(HEADER_FLAG) !== '1') return;
         var orig = h1.getAttribute('data-original');
@@ -171,10 +197,10 @@
     }
 
     function ensurePanel() {
-        var tabContent = document.querySelector('#settings-container .tab-content');
+        var tabContent = deepQuery('#settings-container .tab-content');
         if (!tabContent) return null;
 
-        var existing = document.getElementById('panel');
+        var existing = deepQuery('#' + 'panel');
         if (existing && existing.parentNode === tabContent) return existing;
 
         if (existing) existing.remove();
@@ -188,7 +214,7 @@
     function openNexus() {
         open = true;
 
-        var tabContent = document.querySelector('#settings-container .tab-content');
+        var tabContent = deepQuery('#settings-container .tab-content');
         if (!tabContent) return;
 
         var panel = ensurePanel();
@@ -206,9 +232,9 @@
     function closeNexus() {
         open = false;
 
-        var tabContent = document.querySelector('#settings-container .tab-content');
+        var tabContent = deepQuery('#settings-container .tab-content');
         if (tabContent) tabContent.classList.remove(TAB_CONTENT_HIDE_CLASS);
-        var panel = document.getElementById('panel');
+        var panel = deepQuery('#' + 'panel');
         if (panel) panel.classList.remove('active');
         clearActive();
         restoreTitle();
@@ -217,11 +243,11 @@
 
     function purgeNexusPanel() {
         open = false;
-        var panel = document.getElementById('panel');
+        var panel = deepQuery('#' + 'panel');
         if (panel) panel.remove();
-        var tab = document.getElementById(TAB_ID);
+        var tab = deepQuery('#' + TAB_ID);
         if (tab) tab.remove();
-        var tabContent = document.querySelector('#settings-container .tab-content');
+        var tabContent = deepQuery('#settings-container .tab-content');
         if (tabContent) tabContent.classList.remove(TAB_CONTENT_HIDE_CLASS);
         restoreTitle();
         restoreHeader();
@@ -235,7 +261,7 @@
     }
 
     function isSettingsPage() {
-        return isAccountPage() && !!document.getElementById('vertical-menu');
+        return isAccountPage() && !!deepQuery('#vertical-menu');
     }
 
     document.addEventListener('click', function (e) {
@@ -260,7 +286,7 @@
         accountStyle();
 
         if (!isAccountPage()) {
-            if (document.getElementById(TAB_ID) || document.getElementById('panel')) purgeNexusPanel();
+            if (deepQuery('#' + TAB_ID) || deepQuery('#' + 'panel')) purgeNexusPanel();
             return;
         }
 
@@ -272,8 +298,8 @@
         if (consumeReopen()) { openNexus(); return; }
 
         if (open) {
-            var tabContent = document.querySelector('#settings-container .tab-content');
-            var panel = document.getElementById('panel');
+            var tabContent = deepQuery('#settings-container .tab-content');
+            var panel = deepQuery('#' + 'panel');
             if (!panel || panel.parentNode !== tabContent) {
                 var p = ensurePanel();
                 if (p && tabContent) {
@@ -285,11 +311,11 @@
     }
 
     function observeMenu() {
-        var list = document.getElementById('vertical-menu');
+        var list = deepQuery('#vertical-menu');
         if (!list || list.__watched) return;
         list.__watched = true;
         new MutationObserver(function () {
-            if (!document.getElementById(TAB_ID)) ensureTab();
+            if (!deepQuery('#' + TAB_ID)) ensureTab();
         }).observe(list, { childList: true });
     }
 
