@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nexus
 // @namespace    https://github.com/zykieboi/nexus
-// @version      1.4.7
+// @version      1.5.0
 // @icon         https://raw.githubusercontent.com/7io5/nexus/main/img/icon.png
 // @author       zykieboi
 // @description  Testing stuff :)
@@ -16,7 +16,7 @@
 // @connect      raw.githubusercontent.com
 // @connect      octomons.wtf
 // @run-at       document-start
-// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=15.8
+// @require      https://raw.githubusercontent.com/zykieboi/nexus/main/build/bundle.js?v=16.0
 // @downloadURL  https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // @updateURL    https://raw.githubusercontent.com/zykieboi/nexus/main/main.user.js
 // ==/UserScript==
@@ -28,13 +28,13 @@
     window.NX.ui = window.NX.ui || {};
     window.NX.role = null;
 
-    var TAB_ID = 'tab';
-    var TAB_CONTENT_HIDE_CLASS = 'hiding';
-    var HEADER_FLAG = 'data-swapped';
-    var REOPEN_KEY = 'reopen';
+    var TAB_ID = 'nx-tab';
+    var TAB_CONTENT_HIDE_CLASS = 'nx-hiding';
+    var HEADER_FLAG = 'data-nx-swapped';
+    var REOPEN_KEY = 'nx_reopen';
     var BASE_TITLE = null;
 
-    var open = false;
+    var nxOpen = false;
     var reopenConsumed = false;
 
     function deepQuery(selector, root) {
@@ -63,15 +63,21 @@
         return out;
     }
 
+    function findShadowRoot(el) {
+        if (!el) return null;
+        if (el.shadowRoot) return el.shadowRoot;
+        return el.getRootNode ? el.getRootNode() : null;
+    }
+
     function meId() {
-        var id = parseInt(localStorage.getItem('me_id') || '0', 10);
+        var id = parseInt(localStorage.getItem('nx_me_id') || '0', 10);
         if (id) return id;
         try {
             var u = window.__NEXT_DATA__ && window.__NEXT_DATA__.props
                 && window.__NEXT_DATA__.props.pageProps
                 && window.__NEXT_DATA__.props.pageProps.user;
             if (u && u.id) {
-                localStorage.setItem('me_id', String(u.id));
+                localStorage.setItem('nx_me_id', String(u.id));
                 return u.id;
             }
         } catch (e) {}
@@ -80,7 +86,7 @@
             var m = (a.getAttribute('href') || '').match(/\/users\/(\d+)\/profile/);
             if (m) {
                 id = parseInt(m[1], 10);
-                localStorage.setItem('me_id', String(id));
+                localStorage.setItem('nx_me_id', String(id));
                 return id;
             }
         }
@@ -108,9 +114,9 @@
     window.NX.refreshRole = refreshRole;
 
     function accountStyle() {
-        if (document.getElementById('account-style')) return;
+        if (document.getElementById('nx-account-style')) return;
         var s = document.createElement('style');
-        s.id = 'account-style';
+        s.id = 'nx-account-style';
         s.textContent = [
             '#settings-container .tab-content.' + TAB_CONTENT_HIDE_CLASS + ' > [ui-view]{display:none}',
             '#settings-container .tab-content.' + TAB_CONTENT_HIDE_CLASS + '{overflow:visible!important;height:auto!important;max-height:none!important}',
@@ -168,21 +174,16 @@
         if (tab) tab.classList.remove('active');
     }
 
-    function setTitle() {
-        if (BASE_TITLE === null) BASE_TITLE = document.title;
-        document.title = BASE_TITLE + ' — Nexus';
-    }
-
-    function restoreTitle() {
-        if (BASE_TITLE !== null) document.title = BASE_TITLE;
-    }
+    // Do not change the title
+    function setTitle() {}
+    function restoreTitle() {}
 
     function swapHeader() {
         var h1 = deepQuery('.user-account-header');
         if (!h1) return;
         if (h1.getAttribute(HEADER_FLAG) === '1') return;
         h1.setAttribute(HEADER_FLAG, '1');
-        h1.setAttribute('data-original', h1.textContent);
+        h1.setAttribute('data-nx-original', h1.textContent);
         h1.textContent = 'My Nexus Settings';
     }
 
@@ -190,29 +191,32 @@
         var h1 = deepQuery('.user-account-header');
         if (!h1) return;
         if (h1.getAttribute(HEADER_FLAG) !== '1') return;
-        var orig = h1.getAttribute('data-original');
+        var orig = h1.getAttribute('data-nx-original');
         if (orig) h1.textContent = orig;
         h1.removeAttribute(HEADER_FLAG);
-        h1.removeAttribute('data-original');
+        h1.removeAttribute('data-nx-original');
     }
 
     function ensurePanel() {
         var tabContent = deepQuery('#settings-container .tab-content');
         if (!tabContent) return null;
 
-        var existing = deepQuery('#' + 'panel');
+        var existing = deepQuery('#' + 'nx-panel');
         if (existing && existing.parentNode === tabContent) return existing;
 
         if (existing) existing.remove();
         if (!window.NX.ui.settingsPage || typeof window.NX.ui.settingsPage.build !== 'function') return null;
 
-        var panel = window.NX.ui.settingsPage.build();
+        // Find the root node of the tabContent to inject styles there
+        var rootNode = findShadowRoot(tabContent);
+        
+        var panel = window.NX.ui.settingsPage.build(rootNode);
         tabContent.appendChild(panel);
         return panel;
     }
 
     function openNexus() {
-        open = true;
+        nxOpen = true;
 
         var tabContent = deepQuery('#settings-container .tab-content');
         if (!tabContent) return;
@@ -221,29 +225,29 @@
         if (!panel) return;
 
         tabContent.classList.add(TAB_CONTENT_HIDE_CLASS);
-        panel.classList.add('active');
+        panel.classList.add('nx-active');
 
         ensureTab();
         markActive();
-        setTitle();
+        // setTitle(); -- Disabled
         swapHeader();
     }
 
     function closeNexus() {
-        open = false;
+        nxOpen = false;
 
         var tabContent = deepQuery('#settings-container .tab-content');
         if (tabContent) tabContent.classList.remove(TAB_CONTENT_HIDE_CLASS);
-        var panel = deepQuery('#' + 'panel');
-        if (panel) panel.classList.remove('active');
+        var panel = deepQuery('#' + 'nx-panel');
+        if (panel) panel.classList.remove('nx-active');
         clearActive();
-        restoreTitle();
+        // restoreTitle(); -- Disabled
         restoreHeader();
     }
 
     function purgeNexusPanel() {
-        open = false;
-        var panel = deepQuery('#' + 'panel');
+        nxOpen = false;
+        var panel = deepQuery('#' + 'nx-panel');
         if (panel) panel.remove();
         var tab = deepQuery('#' + TAB_ID);
         if (tab) tab.remove();
@@ -286,7 +290,7 @@
         accountStyle();
 
         if (!isAccountPage()) {
-            if (deepQuery('#' + TAB_ID) || deepQuery('#' + 'panel')) purgeNexusPanel();
+            if (deepQuery('#' + TAB_ID) || deepQuery('#' + 'nx-panel')) purgeNexusPanel();
             return;
         }
 
@@ -297,14 +301,14 @@
 
         if (consumeReopen()) { openNexus(); return; }
 
-        if (open) {
+        if (nxOpen) {
             var tabContent = deepQuery('#settings-container .tab-content');
-            var panel = deepQuery('#' + 'panel');
+            var panel = deepQuery('#' + 'nx-panel');
             if (!panel || panel.parentNode !== tabContent) {
                 var p = ensurePanel();
                 if (p && tabContent) {
                     tabContent.classList.add(TAB_CONTENT_HIDE_CLASS);
-                    p.classList.add('active');
+                    p.classList.add('nx-active');
                 }
             }
         }
@@ -312,8 +316,8 @@
 
     function observeMenu() {
         var list = deepQuery('#vertical-menu');
-        if (!list || list.__watched) return;
-        list.__watched = true;
+        if (!list || list.__nxWatched) return;
+        list.__nxWatched = true;
         new MutationObserver(function () {
             if (!deepQuery('#' + TAB_ID)) ensureTab();
         }).observe(list, { childList: true });
@@ -343,24 +347,11 @@
     }
 
     function tick() {
-        var isFrame = location.pathname.indexOf('/theme2020/') === 0;
-
         panelTick();
 
         var f = window.NX.features;
         var s = window.NX.settings;
         if (!f || !s) return;
-
-        if (isFrame) {
-            var fb = f.background;
-            var ub = f.userBadge;
-            var tv = f.tradeValues;
-            if (s.get('background') && fb) fb.apply();
-            if (s.get('userBadge') && ub) ub.apply();
-            if (s.get('tradeValues') && tv) tv.apply();
-            if (s.get('snow') && f.snow) f.snow.apply();
-            return;
-        }
 
         if (s.get('removeAds') && f.removeAds) f.removeAds.apply();
         if (s.get('hideAlert') && f.hideAlert) f.hideAlert.apply();
@@ -370,6 +361,8 @@
         if (s.get('tradeValues') && f.tradeValues) f.tradeValues.apply();
         if (s.get('quickSearch') && f.quickSearch) f.quickSearch.apply();
         if (s.get('snow') && f.snow) f.snow.apply();
+        if (s.get('background') && f.background) f.background.apply();
+        if (s.get('userBadge') && f.userBadge) f.userBadge.apply();
     }
 
     var tries = 0;
@@ -398,10 +391,6 @@
     wrapHistory('pushState');
     wrapHistory('replaceState');
     window.addEventListener('popstate', function () { setTimeout(tick, 0); });
-
-    document.addEventListener('visibilitychange', function () {
-        if (document.hidden) clearInterval(burst);
-    });
 
     var booted = false;
     function boot() {
