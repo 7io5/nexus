@@ -70,20 +70,6 @@
         'Anton', 'Righteous', 'Permanent Marker', 'Pacifico'
     ];
 
-    var SKIP_SELECTOR = [
-        'code', 'pre', 'kbd', 'samp', 'var', 'tt',
-        'textarea', 'input', 'select',
-        '[contenteditable="true"]',
-        '.nx-css-editor', '.nx-css-editor *',
-        '#octo-panel-cssarea', '#octo-panel-cssarea *',
-        '#octo-panel-prompt-input',
-        '.nx-code', '.nx-code *',
-        '.rbx-code', '.rbx-code *',
-        '.shader-editor', '.shader-editor *',
-        '.monaco-editor', '.monaco-editor *',
-        '.CodeMirror', '.CodeMirror *'
-    ].join(', ');
-
     function getFontId() {
         try { return localStorage.getItem(STORAGE_KEY) || 'default'; }
         catch (e) { return 'default'; }
@@ -119,20 +105,14 @@
 
     function buildCss(stack) {
         return [
-            'html, body, #__next, .gotham-font, .gotham-font *, #nx-panel, #nx-panel * {',
+            'html, body, #__next, .gotham-font, .gotham-font * {',
             '  font-family: ' + stack + ' !important;',
             '}',
             'html code, html pre, html kbd, html samp, html var, html tt,',
             'html textarea, html input, html select,',
             'html [contenteditable="true"],',
             'html .monaco-editor, html .monaco-editor *,',
-            'html .CodeMirror, html .CodeMirror *,',
-            'html .nx-css-editor, html .nx-css-editor *,',
-            'html #octo-panel-cssarea, html #octo-panel-cssarea *,',
-            'html #octo-panel-prompt-input,',
-            'html .nx-code, html .nx-code *,',
-            'html .rbx-code, html .rbx-code *,',
-            'html .shader-editor, html .shader-editor * {',
+            'html .CodeMirror, html .CodeMirror * {',
             '  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;',
             '}'
         ].join('\n');
@@ -150,15 +130,6 @@
         else root.appendChild(s);
     }
 
-    function forEachShadowRoot(fn) {
-        var hosts = document.querySelectorAll('*');
-        for (var i = 0; i < hosts.length; i++) {
-            if (hosts[i].shadowRoot) {
-                fn(hosts[i].shadowRoot);
-            }
-        }
-    }
-
     function inject() {
         var cfg = fontById(getFontId());
         if (!cfg.stack) {
@@ -167,13 +138,16 @@
         }
         injectGoogleFonts();
         
-        // 1. Inject into main document
+        // 1. Main document
         injectIntoRoot(document, cfg.stack, STYLE_ID);
 
-        // 2. Inject into all shadow roots
-        forEachShadowRoot(function (root) {
-            injectIntoRoot(root, cfg.stack, STYLE_ID);
-        });
+        // 2. All existing shadow roots
+        var hosts = document.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                injectIntoRoot(hosts[i].shadowRoot, cfg.stack, STYLE_ID);
+            }
+        }
     }
 
     function injectAll() { inject(); }
@@ -181,44 +155,31 @@
     function removeAll() {
         var a = document.getElementById(STYLE_ID);
         if (a) a.remove();
-        forEachShadowRoot(function (root) {
-            var b = root.getElementById ? root.getElementById(STYLE_ID) : root.querySelector('#' + STYLE_ID);
-            if (b) b.remove();
-        });
-    }
-
-    var scheduled = false;
-    function scheduleInject() {
-        if (scheduled) return;
-        scheduled = true;
-        requestAnimationFrame(function () {
-            scheduled = false;
-            inject();
-        });
-    }
-
-    function apply() {
-        var run = function () {
-            inject();
-
-            var obs = new MutationObserver(function () {
-                if (getFontId() !== 'default') scheduleInject();
-            });
-            obs.observe(document.documentElement, { childList: true, subtree: true });
-        };
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', run, { once: true });
-            window.addEventListener('load', function () { scheduleInject(); }, { once: true });
-        } else if (document.readyState === 'interactive') {
-            window.addEventListener('load', function () { scheduleInject(); }, { once: true });
-            run();
-        } else {
-            run();
+        var hosts = document.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                var b = hosts[i].shadowRoot.getElementById ? hosts[i].shadowRoot.getElementById(STYLE_ID) : hosts[i].shadowRoot.querySelector('#' + STYLE_ID);
+                if (b) b.remove();
+            }
         }
     }
 
+    var observer = null;
+
+    function apply() {
+        inject();
+
+        if (observer) observer.disconnect();
+        observer = new MutationObserver(function () {
+            inject();
+        });
+        
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
     function teardown() {
+        if (observer) observer.disconnect();
+        observer = null;
         removeAll();
         linksInjected = false;
         var l = document.getElementById('nx-custom-font-links');
