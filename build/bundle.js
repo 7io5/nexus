@@ -3782,6 +3782,8 @@
 })();
 
 /* src/features/itemOwners.js */
+// src/features/itemOwners.js
+
 (function () {
     'use strict';
 
@@ -3804,6 +3806,32 @@
     var watcher = null;
     var watchedStrip = null;
     var lastPath = location.pathname;
+
+    function deepQuery(selector, root) {
+        root = root || document;
+        var found = root.querySelector(selector);
+        if (found) return found;
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                var r = deepQuery(selector, hosts[i].shadowRoot);
+                if (r) return r;
+            }
+        }
+        return null;
+    }
+
+    function deepQueryAll(selector, root) {
+        root = root || document;
+        var out = Array.prototype.slice.call(root.querySelectorAll(selector));
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                out = out.concat(deepQueryAll(selector, hosts[i].shadowRoot));
+            }
+        }
+        return out;
+    }
 
     function isOn() {
         return window.NX.settings && window.NX.settings.get('itemOwners');
@@ -4345,7 +4373,7 @@
     }
 
     function toggleResellers(show) {
-        var nodes = document.querySelectorAll('.resellers-container, resellers-pane, #resellers');
+        var nodes = deepQueryAll('.resellers-container, resellers-pane, #resellers');
         Array.prototype.forEach.call(nodes, function (n) {
             if (show) n.classList.remove('nx-hide');
             else n.classList.add('nx-hide');
@@ -4403,9 +4431,9 @@
         if (!isOn()) return;
         if (!onItemPage()) return;
         if (injectedPath === location.pathname
-            && document.getElementById(TAB_ID)) return;
+            && deepQuery('#' + TAB_ID)) return;
 
-        var strip = document.getElementById('horizontal-tabs');
+        var strip = deepQuery('#horizontal-tabs');
         if (!strip || !strip.querySelector('li')) return;
 
         var content = strip.nextElementSibling;
@@ -4417,7 +4445,7 @@
         var id = assetId();
         if (!id) return;
 
-        if (!document.getElementById(TAB_ID)) {
+        if (!deepQuery('#' + TAB_ID)) {
             strip.appendChild(makeTab());
             content.appendChild(makePanel());
         }
@@ -4428,18 +4456,18 @@
 
     function purge() {
         injectedPath = '';
-        var t = document.getElementById(TAB_ID);
+        var t = deepQuery('#' + TAB_ID);
         if (t) t.remove();
-        var p = document.getElementById(PANEL_ID);
+        var p = deepQuery('#' + PANEL_ID);
         if (p) p.remove();
         Array.prototype.forEach.call(
-            document.querySelectorAll('.nx-hide'),
+            deepQueryAll('.nx-hide'),
             function (n) { n.classList.remove('nx-hide'); }
         );
     }
 
     function watch() {
-        var strip = document.getElementById('horizontal-tabs');
+        var strip = deepQuery('#horizontal-tabs');
         if (!strip || (strip === watchedStrip && watcher)) return;
         if (watcher) watcher.disconnect();
         watchedStrip = strip;
