@@ -214,6 +214,32 @@
 
     var CHECK_ASSET_TYPE = ['Hat'];
 
+    function deepQuery(selector, root) {
+        root = root || document;
+        var found = root.querySelector(selector);
+        if (found) return found;
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                var r = deepQuery(selector, hosts[i].shadowRoot);
+                if (r) return r;
+            }
+        }
+        return null;
+    }
+
+    function deepQueryAll(selector, root) {
+        root = root || document;
+        var out = Array.prototype.slice.call(root.querySelectorAll(selector));
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+            if (hosts[i].shadowRoot) {
+                out = out.concat(deepQueryAll(selector, hosts[i].shadowRoot));
+            }
+        }
+        return out;
+    }
+
     function shortNum(n) {
         n = Number(n) || 0;
         if (n < 1000) return String(n);
@@ -967,9 +993,9 @@
     }
 
     function shutMenus() {
-        var em = document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu');
+        var em = deepQuery('#' + MODAL_ID + ' .nx-rap-export-menu');
         if (em) em.classList.remove('open');
-        var sm = document.querySelector('#' + MODAL_ID + ' .nx-rap-sort-menu');
+        var sm = deepQuery('#' + MODAL_ID + ' .nx-rap-sort-menu');
         if (sm) sm.classList.remove('open');
     }
 
@@ -984,7 +1010,7 @@
     }
 
     function buildModal() {
-        var existing = document.getElementById(OVERLAY_ID);
+        var existing = deepQuery('#' + OVERLAY_ID);
         if (existing) return existing;
         applyStyle();
 
@@ -1065,7 +1091,7 @@
 
         sortBtn.onclick = function (e) {
             e.stopPropagation();
-            var em = document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu');
+            var em = deepQuery('#' + MODAL_ID + ' .nx-rap-export-menu');
             if (em) em.classList.remove('open');
             sortMenu.classList.toggle('open');
         };
@@ -1101,7 +1127,7 @@
 
         exportBtn.onclick = function (e) {
             e.stopPropagation();
-            var sm = document.querySelector('#' + MODAL_ID + ' .nx-rap-sort-menu');
+            var sm = deepQuery('#' + MODAL_ID + ' .nx-rap-sort-menu');
             if (sm) sm.classList.remove('open');
             exportMenu.classList.toggle('open');
         };
@@ -1135,8 +1161,8 @@
 
         document.addEventListener('keydown', function (e) {
             if (e.key !== 'Escape' || !overlay.classList.contains('nx-open')) return;
-            var anyOpen = document.querySelector('#' + MODAL_ID + ' .nx-rap-export-menu.open')
-                || document.querySelector('#' + MODAL_ID + ' .nx-rap-sort-menu.open');
+            var anyOpen = deepQuery('#' + MODAL_ID + ' .nx-rap-export-menu.open')
+                || deepQuery('#' + MODAL_ID + ' .nx-rap-sort-menu.open');
             if (anyOpen) shutMenus();
             else closeModal();
         });
@@ -1145,7 +1171,7 @@
     }
 
     function paintSkeleton(n) {
-        var overlay = document.getElementById(OVERLAY_ID);
+        var overlay = deepQuery('#' + OVERLAY_ID);
         if (!overlay) return;
         var body = overlay.querySelector('.nx-rap-body');
 
@@ -1180,7 +1206,7 @@
     }
 
     function paintSpinner() {
-        var overlay = document.getElementById(OVERLAY_ID);
+        var overlay = deepQuery('#' + OVERLAY_ID);
         if (!overlay) return;
         var body = overlay.querySelector('.nx-rap-body');
         body.innerHTML = '<div class="nx-rap-loading"><div class="nx-rap-spinner"></div></div>';
@@ -1273,7 +1299,7 @@
     }
 
     function paintGrid(isSorting) {
-        var overlay = document.getElementById(OVERLAY_ID);
+        var overlay = deepQuery('#' + OVERLAY_ID);
         if (!overlay) return;
         var body = overlay.querySelector('.nx-rap-body');
         var subtitle = overlay.querySelector('.nx-rap-subtitle');
@@ -1406,7 +1432,7 @@
 
     function closeModal() {
         shutMenus();
-        var overlay = document.getElementById(OVERLAY_ID);
+        var overlay = deepQuery('#' + OVERLAY_ID);
         if (overlay) overlay.classList.remove('nx-open');
     }
 
@@ -1414,7 +1440,7 @@
         var userId = currentUserId();
         if (!userId) return true;
 
-        var list = document.querySelector('.details-info');
+        var list = deepQuery('.details-info');
         if (!list) return false;
         if (list.querySelector('.nx-rap-row')) return true;
 
@@ -1539,11 +1565,11 @@
                 styleWatchBound = false;
             }
             closeModal();
-            var overlay = document.getElementById(OVERLAY_ID);
+            var overlay = deepQuery('#' + OVERLAY_ID);
             if (overlay) overlay.remove();
             var style = document.getElementById(STYLE_ID);
             if (style) style.remove();
-            var row = document.querySelector('.nx-rap-row');
+            var row = deepQuery('.nx-rap-row');
             if (row) row.remove();
         }
     };
